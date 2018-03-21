@@ -1,0 +1,19 @@
+[1] - BubbleP_OldOption_ButWork_AlthoughHeavy.py:
+==> é um programa bolhaP robusto, porém pesado pois empregado o método numérico brute do Scipy. Ele foi construído empregando a forma mais usual
+    para verificar se o programa convergiu, ou seja, a Sy = 1.
+==> para utilizar este progrma, eu estava chamando ele pelo BubbleP__singlePoint.py (e também com o BubbleP__curvePoints.py)
+
+
+[2] - BubbleP__singlePoint.py:
+==> estava empregando este para chamar o BubbleP.py, renomeado aqui como BubbleP_OldOption_ButWork_AlthoughHeavy.py. 
+
+
+[3] - Math_Roots_Arthur.py:
+==> é o código para determinar raiz da EoS; originalmente tinha o nome de Math_Roots.py; fiz esta cópia com o nome do Arthur como backup.
+
+
+[4] - Bubble_french.py:
+==> é um código bem simples para construir curvas P vs {x,y} para um determinada T. Não terminei, pois precisa refinar melhor. Não segui adiante porque
+não estou certo da utilidade para o que eu desejo. 
+==> Fonte: "A simple and unified algorithm to solve fluid phase equilibria using either the gamma-phi or the phi-phi approach for binary and ternary mixtures"
+Autores: Romain PRIVAT*,a, Jean-Noël JAUBERTa and Yannick PRIVATb
