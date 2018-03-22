@@ -8,7 +8,7 @@ from input_pipe_data import input_pipe_data_function
 #Constantes
 g = 9.8                             # m/s^2
 R = 8314.34                         # J / (kmol K)
-print("Just a test to check if Git and GitHub are talking")
+
 
 """
 #======================== PARAMETROS DE ENTRADA (O PROGRAMA TODO no SI) ======================
