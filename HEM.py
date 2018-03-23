@@ -2,6 +2,9 @@
 import numpy as np 
 from scipy import integrate, optimize
 import matplotlib.pyplot as plt
+import Tools_Convert
+from InputData___ReadThisFile import props
+from BubbleP import bubble_obj
 from input_flow_data import input_flow_data_function
 from input_pipe_data import input_pipe_data_function
 
@@ -19,7 +22,7 @@ R = 8314.34                         # J / (kmol K)
 #mw: molecular weight - peso molecular do vapor água [kg/kmol]
 #T_e: temperatura de entrada [K]
 #P_e: pressao de entrada [Pa]
-#P_sat: pressão de saturação [Pa] @ P_sat = P_sat(T_e)
+#pB: pressão de saturação [Pa] @ pB = pB(T_e)  
 #x_e: título de vapor entrada duto [-]
 #Mt = Mg_e + Mf_e: vazão massica total (kg/s)
 #D: diametro em inch transformado para metros [m]
@@ -38,11 +41,46 @@ R = 8314.34                         # J / (kmol K)
 #teta_rad: ângulo teta em radianos [rad]
 #A: área transversal duto [m2]
 #Sr = ug/ul: speed ratio
-(P_e, P_sat, T_e, Mg_e, Mf_e, mw, vis_g, vis_f, rho_f) = input_flow_data_function()
+
+'''
+=================================================================================
+TAKING SPECIFIC HEAT FROM props (LOOK AT THE HEAD)
+=================================================================================
+'''
+(pC, Tc, AcF, MM, omega_a, omega_b, kij, Cp) = props
+
+'''
+=================================================================================
+TAKING SATURATION PRESSURE FROM BubbleP.py
+FOR MORE INFORMATION ABOUT BubbleP consult this Bubble.py
+=================================================================================
+'''
+(P_e, T_e, Mg_e, Mf_e, mw, vis_g, vis_f, rho_f) = input_flow_data_function()
 (D, Ld, ks, teta) = input_pipe_data_function()
+
+T = T_e
+LC, base = 99./100, 'mass' # <=============================== change here
+zin = np.array([LC, (1. - LC)])
+z, z_mass = Tools_Convert.frac_input(MM, zin, base)
+pG = 1.2 * bubble_obj.pressure_guess(T, z)
+pB, y, Sy, counter = bubble_obj(T, z)
+y_mass = Tools_Convert.convert_molarfrac_TO_massfrac(MM, y)
+
+
+
+
 T = T_e                   
 Sr = 1.
-print("Pressao entrada = %.2e; Pressao saturacao = %.2e" %(P_e, P_sat))
+if __name__== '__main__':
+    print('\n---------------------------------------------------')
+    print('[1] - Guess pB [Pa]= %.8e' % pG)
+    print('[2] - ======> at T = %.2f [C], pB = %.8e [Pa] ' % ((T - 273.15), pB) + '\n')
+    print('[3] - Concentration vapor phase [molar] = ', y.round(3))
+    print('[4] - Concentration vapor phase [mass] = ', y_mass.round(3))
+    print('[5] - Pay attention if Sy is close to unity (Sy = %.10f) [molar]' % Sy)
+    print('[6] - Global {mass} fraction = ', z_mass.round(3))
+    print('[7] - Global {molar} fraction = ', z.round(3))
+
 
 
 #[2]========== OUTRAS CONSTANTES + CÁLCULO SIMPLES ===========
@@ -93,7 +131,7 @@ hg = 2675.7e3                       # J/kg @ [Tsat(P_amb)] - pg 529 - Ghiaasiaan
 hf = 419.06e3                       # J/kg @ [Tsat(P_amb)] - pg 529 - Ghiaasiaan
 dZdP = 0.                           # tx variacao fator compressibilidade do gás com a pressão
 Cp_g = 2.029e3                      # J/(kg K) @ [Tsat(P_amb)] - pg 532 - Ghiaasiaan
-Cp_f = 4.217e3                      # J/(kg K) @ [Tsat(P_amb)] - pg 532 - Ghiaasiaan
+Cp_f = np.einsum('i,i', z, Cp)      # J/(kg K) @ solução ideal (dados de Cp vindos de props)
 T_ref = 273.15                      # T_ref temperatura de referência [K]
 h_ref = 0.0                         # entalpia de referência  [J/kg] @ T_ref
 h_e = Cp_f * (T_e  - T_ref) + h_ref #Tenho que analisar melhor (considerei T* = 273.15K e h* = 0)
@@ -149,33 +187,18 @@ jPh_singlephase = integrate.odeint(sistemaEDO, jPh_init, Z, args=(Gt, D, T, mw, 
 j = jPh_singlephase[:,0]
 P = jPh_singlephase[:,1]
 h = jPh_singlephase[:,2]
-P_sat_v = P_sat * np.ones_like(Z)
+pB_v = pB * np.ones_like(Z)
 
 
-qtd_pontos = Z.shape[0]
-for int in np.arange(0, qtd_pontos):
-    var = j[int], P[int], h[int] 
-    resultado = sistemaEDO(var, Z, Gt, D, T, mw, vis_f, vef_e, ks)
-    print("dPdZ_singlephase = ", resultado[2])
-    print("interador", int)
+# qtd_pontos = Z.shape[0]
+# for int in np.arange(0, qtd_pontos):
+#     var = j[int], P[int], h[int] 
+#     resultado = sistemaEDO(var, Z, Gt, D, T, mw, vis_f, vef_e, ks)
+#     print("dPdZ_singlephase = ", resultado[2])
+#     print("interador", int)
 
 
 
-
-# print("dPdZ_compressivel", resultado[2])
-#print("posicao Z", Z)
-# print("pressao", P)
-# print("titulo x", x)
-# print("velocidade j", j)
-#if (P_inc>Psat_v).all():
-#    Pp=P_inc
-#else:
-#    Pp=jxP_integrado[:,2]
-#
-# if  (P > Psat_v).all():
-#     Pp = P_inc
-# else:
-#     Pp = P #jxP_integrado[:,2]
 
 
 #[8]=========================== GRÁFICOS =====================
@@ -208,7 +231,7 @@ plt.figure(figsize=(7,5))
 plt.xlabel('Z [m]')
 plt.ylabel('P [Pascal]')
 plt.plot(Z, P)
-plt.plot(Z, P_sat_v)
+plt.plot(Z, pB_v)
 plt.legend(['Pressao Esc. Incompressivel', 'Pressão Saturação'], loc=3)
 
 plt.figure(figsize=(7,5))
