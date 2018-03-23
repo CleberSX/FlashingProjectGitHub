@@ -200,7 +200,7 @@ bubble_obj = Bubble_class(pC, Tc, AcF, kij)
   INPUT DATA:
 =========================================================================================================
 '''
-T = (0. + 273.15)   # <=================================== change here
+T = (10. + 273.15)   # <=================================== change here
 LC, base = 99./100, 'mass' # <=============================== change here
 zin = np.array([LC, (1. - LC)])
 z, z_mass = Tools_Convert.frac_input(MM, zin, base)
