@@ -10,7 +10,7 @@ def input_flow_data_function():
     '''
     room_pressure = 1.e5        # pressao ambiente [Pa]
     pressure_saturation = 1. * room_pressure # pressão de saturação [Pa] @ P=P(Temperature)
-    temperature = 373.15                    #[K]
+    temperature = 273.15                    #[K]
     pressure = 15. * room_pressure           # pressão início duto [Pa]
     visc_g = 12.02e-6                       #kg/(m s) @ [Tsat(P_amb)] - pg 529 - Ghiaasiaan
     visc_f = 279e-6                         #kg/(m s) @ [Tsat(P_amb)] - pg 529 - Ghiaasiaan
