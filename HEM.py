@@ -52,7 +52,7 @@ TAKING SPECIFIC HEAT FROM props (LOOK AT THE HEAD)
 '''
 =================================================================================
 TAKING SATURATION PRESSURE FROM BubbleP.py
-FOR MORE INFORMATION ABOUT BubbleP consult this Bubble.py
+FOR MORE INFORMATION ABOUT BubbleP consult this BubbleP.py
 =================================================================================
 '''
 (P_e, T_e, Mg_e, Mf_e, mw, vis_g, vis_f, rho_f) = input_flow_data_function()
@@ -216,8 +216,10 @@ pB_v = pB * np.ones_like(Z)
 #plt.ylabel('Pressao [Pascal]')
 #plt.plot(Z,P)
 #plt.legend(['Pressao ao longo do duto'], loc=1) #loc=2 vai para canto sup esq
-msg = "Testando o VS Code"
+msg = "Foi feito o cálculo do Cp_f do single-phase liquid"
 print(msg)
+print(Cp_f)
+
 plt.figure(figsize=(7,5))
 #plt.ylim(20,120)
 plt.xlabel('Z [m]')
