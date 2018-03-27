@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import Tools_Convert
 from InputData___ReadThisFile import props
 from BubbleP import bubble_obj
+from Properties import Properties
+from EOS_PengRobinson import PengRobinsonEos
 from input_flow_data import input_flow_data_function
 from input_pipe_data import input_pipe_data_function
 
@@ -50,6 +52,14 @@ TAKING SPECIFIC HEAT FROM props (LOOK AT THE HEAD)
 (pC, Tc, AcF, MM, omega_a, omega_b, kij, Cp) = props
 
 '''
+=================================================================================================================
+NECESSARY OBJECTS
+=================================================================================================================
+'''
+prop_obj = Properties(pC, Tc, AcF, omega_a, omega_b, kij)
+eos_obj = PengRobinsonEos(pC, Tc, AcF, omega_a, omega_b, kij)
+
+'''
 =================================================================================
 TAKING SATURATION PRESSURE FROM BubbleP.py
 FOR MORE INFORMATION ABOUT BubbleP consult this BubbleP.py
@@ -62,11 +72,17 @@ T = T_e
 LC, base = 99./100, 'mass' # <=============================== change here
 zin = np.array([LC, (1. - LC)])
 z, z_mass = Tools_Convert.frac_input(MM, zin, base)
-pG = 1.2 * bubble_obj.pressure_guess(T, z)
-pB, y, Sy, counter = bubble_obj(T, z)
+pG = 1.2 * bubble_obj.pressure_guess(T_e, z)
+pB, y, Sy, counter = bubble_obj(T_e, z)
 y_mass = Tools_Convert.convert_molarfrac_TO_massfrac(MM, y)
 
 
+# rho_f_EOS = prop_obj.calculate_density_phase(P_e,T_e, MM, z, "liquid")
+# print("Mixture Liquid Density in Duct Entrance", rho_f_EOS)
+
+# f_L, Z_L = eos_obj.calculate_fugacities_with_minimum_gibbs_energy(P_e, T_e, z, 'liquid')
+# vef_EOS = Z_L * R * T_e / (P_e * MM)
+# rho_f_EOS = np.power(vef_EOS, -1)
 
 
 T = T_e                   
@@ -144,7 +160,7 @@ Cv_f = Cp_f                         #Cv_f = Cp_f (aprox.)
 #source: The EDO's system wrote here was based on page 167  Ghiaasiaan
 # How to solve this system? See the page -->
 # --> https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.odeint.html
-def sistemaEDO(jPh, Z, Gt, D, T, mw, vis_f, vef_e, ks):
+def sistemaEDO(jPh, Z, Gt, D, T, mw, vis_f, ks):
     j, P, h = jPh
     Re_mon = Gt * D / vis_f
     
@@ -152,7 +168,9 @@ def sistemaEDO(jPh, Z, Gt, D, T, mw, vis_f, vef_e, ks):
     A12 = 0.
     A13 = 1.e-5
     A21 = j
-    A22 = vef_e
+    # A22 = vef_e
+    rho_f_EOS = prop_obj.calculate_density_phase(P, T, MM, z, "liquid")
+    A22 = np.power(rho_f_EOS, -1)
     A23 = 0.
     A31 = j
     A32 = 0.
@@ -179,7 +197,7 @@ def sistemaEDO(jPh, Z, Gt, D, T, mw, vis_f, vef_e, ks):
 #source: https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.odeint.html
 Z = np.linspace(0, Ld, deltaLd + 1)
 jPh_init = j_e, P_e, h_e
-jPh_singlephase = integrate.odeint(sistemaEDO, jPh_init, Z, args=(Gt, D, T, mw, vis_f, vef_e, ks))
+jPh_singlephase = integrate.odeint(sistemaEDO, jPh_init, Z, args=(Gt, D, T, mw, vis_f, ks))
 
 
 
@@ -190,13 +208,13 @@ h = jPh_singlephase[:,2]
 pB_v = pB * np.ones_like(Z)
 
 
-# qtd_pontos = Z.shape[0]
-# for int in np.arange(0, qtd_pontos):
-#     var = j[int], P[int], h[int] 
-#     resultado = sistemaEDO(var, Z, Gt, D, T, mw, vis_f, vef_e, ks)
-#     print("dPdZ_singlephase = ", resultado[2])
-#     print("interador", int)
-
+qtd_pontos = Z.shape[0]
+for int in np.arange(0, qtd_pontos):
+    var = j[int], P[int], h[int] 
+    resultado = sistemaEDO(var, Z, Gt, D, T, mw, vis_f, ks)
+    rho_f_EOS = prop_obj.calculate_density_phase(P[int], T, MM, z, "liquid")
+    print("Interactor = %i, dPdZ_singlephase = %.2f, Liquid Density = %.2f" % (int, resultado[2], rho_f_EOS))
+    
 
 
 
@@ -216,9 +234,6 @@ pB_v = pB * np.ones_like(Z)
 #plt.ylabel('Pressao [Pascal]')
 #plt.plot(Z,P)
 #plt.legend(['Pressao ao longo do duto'], loc=1) #loc=2 vai para canto sup esq
-msg = "Foi feito o cálculo do Cp_f do single-phase liquid"
-print(msg)
-print(Cp_f)
 
 plt.figure(figsize=(7,5))
 #plt.ylim(20,120)
@@ -254,12 +269,13 @@ plt.legend(['$h_{incompressivel}$ ao longo do duto'], loc=3)
 # plt.plot(Z,x)
 # plt.legend(['Fração de vazio', 'Título de vapor'], loc=1) #loc=2 vai para canto sup esq
 #
-# rho_g = massaEspecificaGas(P,T_e, mw)
+
+# This plot below is not working
 # plt.figure(figsize=(7,5))
 # plt.xlabel('Comprimento z [m]')
-# plt.ylabel('Massa Específica do Gás [kg/m3]')
-# plt.plot(Z,rho_g)
-# plt.legend(['Massa Específica do Gás ao longo do duto'], loc=1) #loc=2 vai para canto sup esq
+# plt.ylabel('Liquid Density [kg/m3]')
+# plt.plot(Z, rho_f_EOS)
+# plt.legend(['Liquid Density Through Duct'], loc=1) #loc=2 vai para canto sup esq
 #
 #
 #

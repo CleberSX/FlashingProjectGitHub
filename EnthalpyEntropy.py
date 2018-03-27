@@ -29,7 +29,7 @@ NECESSARY OBJECTS
 eos_obj = PengRobinsonEos(pC, Tc, AcF, omega_a, omega_b, kij)
 bubble_obj = Bubble_class(pC, Tc, AcF, kij)
 prop_obj = Properties(pC, Tc, AcF, omega_a, omega_b, kij)
-print(prop_obj)
+
 
 
 
