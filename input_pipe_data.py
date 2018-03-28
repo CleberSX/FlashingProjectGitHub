@@ -8,7 +8,7 @@ def input_pipe_data_function():
     '''
     THESE DATA PIPE HAVE BEEN GOTTEN FROM:_______     
     '''
-    diameter = (3./4) * 25.4 / 1000    #[m]
+    diameter = (4. / 5) * 25.4 / 1000    #[m] convert {in} to {m}
     lenght = 1.                    #[m]
     rugosity = 1.2e-3                 #[m]               
     inclination = 70.0                 #[graus]
