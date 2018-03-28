@@ -55,6 +55,8 @@ Sr = 1.
 #Z: compressibility factor --> [p*veg = (Z*R*T) / MM]
 #z: binary mixture composition at entrance: z = ([refrigerant],[oil]) where [brackets] means concentration - [kg Refrig / kg mixture]
 #Zduct: duct length - [m]
+#f_D: Darcy friction factor
+#f_F: Fanning friction factor
 
 
 '''
@@ -63,6 +65,7 @@ TAKING SPECIFIC HEAT FROM props (LOOK AT THE HEAD)
 =================================================================================
 '''
 (pC, Tc, AcF, MM, omega_a, omega_b, kij, Cp) = props
+
 
 '''
 =================================================================================================================
@@ -175,30 +178,22 @@ Cv_f = Cp_f                         # Cv_f = Cp_f (aprox.)
 #source: The EDO's system wrote here was based on page 167  Ghiaasiaan
 # How to solve this system? See the page -->
 # --> https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.odeint.html
-def sistemaEDO(uph, Zduct, Gt, D, T, MMixture, vis_f, ks):
+def systemEDOsinglePhase(uph, Zduct, Gt, D, T, MMixture, vis_f, ks):
     u, p, h = uph
+    Gt2 = np.power(Gt, 2)
     Re_mon = Gt * D / vis_f
-    
-    A11 = np.power(u,-1)
-    A12 = 0.
-    A13 = 1.e-5
-    A21 = u
     rhof = prop_obj.calculate_density_phase(p, T, MM, z, "liquid")
     vef = np.power(rhof, -1)
-    A22 = vef
-    A23 = 0.
-    A31 = u
-    A32 = 0.
-    A33 = 1.
-    
-    
-    colebrook = lambda f0 : 1.14 - 2. * np.log10(ks / D + 9.35 / (Re_mon * np.sqrt(f0)))-1 / np.sqrt(f0)
-    fAtrito = optimize.newton(colebrook, 0.02) #fator atrito de Darcy
-    f_F = fAtrito / 4. #fator atrito de Fanning
 
-    C1 = 0.
-    C2 = -2 * np.power(Gt,2) * vef * (f_F / D)
-    C3 = C2
+    A11, A12, A13 = np.power(u,-1), 0., 1.e-5    
+    A21, A22, A23 = u, vef, 0.
+    A31, A32, A33 = u, 0., 1.
+        
+    colebrook = lambda f0 : 1.14 - 2. * np.log10(ks / D + 9.35 / (Re_mon * np.sqrt(f0)))-1 / np.sqrt(f0)
+    f_D = optimize.newton(colebrook, 0.02)  #fator atrito de Darcy
+    f_F = f_D / 4.                          #fator atrito de Fanning
+
+    C1, C2, C3 = 0., -2 * Gt2 * vef * (f_F / D), -2 * Gt2 * vef * (f_F / D)
     
     
     matrizA = np.array([[A11,A12,A13],[A21,A22,A23],[A31,A32,A33]])
@@ -212,7 +207,7 @@ def sistemaEDO(uph, Zduct, Gt, D, T, MMixture, vis_f, ks):
 #source: https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.odeint.html
 Zduct = np.linspace(0, Ld, deltaLd + 1)
 uph_init = u_e, p_e, h_e
-uph_singlephase = integrate.odeint(sistemaEDO, uph_init, Zduct, args=(Gt, D, T, MMixture, vis_f, ks))
+uph_singlephase = integrate.odeint(systemEDOsinglePhase, uph_init, Zduct, args=(Gt, D, T, MMixture, vis_f, ks))
 
 
 
@@ -226,7 +221,7 @@ pB_v = pB * np.ones_like(Zduct)
 qtd_pontos = Zduct.shape[0]
 for int in np.arange(0, qtd_pontos):
     var = u[int], p[int], h[int] 
-    resultado = sistemaEDO(var, Zduct, Gt, D, T, MMixture, vis_f, ks)
+    resultado = systemEDOsinglePhase(var, Zduct, Gt, D, T, MMixture, vis_f, ks)
     rhof = prop_obj.calculate_density_phase(p[int], T, MM, z, "liquid")
     Tresult = T_ref + (h[int] - h_ref) / Cp_f
     print("Interactor = %i, dPdZ_singlephase = %.2f, Liquid Density = %.2f" % (int, resultado[2], rhof))
