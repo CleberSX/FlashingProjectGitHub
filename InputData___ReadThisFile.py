@@ -8,13 +8,13 @@
 # from zData7 import input_properties_case_noel_nevers_exF5_pg344
 # from zData8 import input_properties_case_artigo_moises_2013___POE_ISO_5, comp1, \
 #     comp2, kij, experimental_data_case_artigo_moises_2013___AB_ISO_5
-from zData9 import input_properties_case_artigo_moises_2013___POE_ISO_7, comp1, comp2, kij, \
-     experimental_data_case_artigo_moises_2013___POE_ISO_7
+#from zData9 import input_properties_case_artigo_moises_2013___POE_ISO_7, comp1, comp2, kij, \
+#     experimental_data_case_artigo_moises_2013___POE_ISO_7
 # from zData10 import input_properties_case_REFPROP___ButaneOctane, comp1, comp2, kij, refprop_data
-
+from zData11 import input_properties_case_R134a___POE_ISO_10, comp1, comp2, kij
 
 '''GET INPUT PROPERTIES'''
-props = input_properties_case_artigo_moises_2013___POE_ISO_7(comp1, comp2, kij)
-exp_data = experimental_data_case_artigo_moises_2013___POE_ISO_7()
+props = input_properties_case_R134a___POE_ISO_10(comp1, comp2, kij)
+#exp_data = experimental_data_case_artigo_moises_2013___POE_ISO_7()
 
 
