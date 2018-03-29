@@ -4,9 +4,11 @@ from scipy import integrate, optimize
 import matplotlib.pyplot as plt
 import Tools_Convert
 from InputData___ReadThisFile import props
+from References_Values import input_reference_values_function
 from BubbleP import bubble_obj
 from Properties import Properties
 from EOS_PengRobinson import PengRobinsonEos
+from EnthalpyEntropy import HSFv
 from input_flow_data import input_flow_data_function
 from input_pipe_data import input_pipe_data_function
 
@@ -57,53 +59,69 @@ Sr = 1.
 #Zduct: duct length - [m]
 #f_D: Darcy friction factor
 #f_F: Fanning friction factor
+# hR_mass: reference enthalpy in mass base [J/kg]
+# hR: reference enthalpy (in molar base) [J/kmol]
+# sR_mass: reference entropy in mass base [J/kg K]
+# sR: reference entropy (in molar base) [J/kmol K]
 
 
 '''
 =================================================================================
-TAKING SPECIFIC HEAT FROM props (LOOK AT THE HEAD)
+                                INPUT DATA
+
+[1] - TAKING SPECIFIC HEAT FROM props (file InputData___ReadThisFile.py)
+
+[2] - Reference values of temperature, enthalpy and entropy are collected from 
+  ...input_reference_values_function() (file Reference_Values.py)
+[3] - FLOW DATA is from input_flow_data_function() (file input_flow_data_function.py)
+[4] - DUCT DATA is from input_pipe_data_function() (finle input_pipe_data_function.py)
 =================================================================================
 '''
 (pC, Tc, AcF, MM, omega_a, omega_b, kij, Cp) = props
+(TR, hR_mass, sR_mass) = input_reference_values_function()
+(p_e, T_e, mdotg_e, mdotf_e, vis_g, vis_f) = input_flow_data_function() # <=============================== change here
+(D, Ld, ks, teta) = input_pipe_data_function() # <=============================== change here
+
 
 
 '''
 =================================================================================================================
-NECESSARY OBJECTS
+CREATING NECESSARY OBJECT
 =================================================================================================================
 '''
 prop_obj = Properties(pC, Tc, AcF, omega_a, omega_b, kij)
-eos_obj = PengRobinsonEos(pC, Tc, AcF, omega_a, omega_b, kij)
-
-'''
-=================================================================================
-OTHERS INPUT DATA: FLOW & DUCT
-=================================================================================
-'''
-(p_e, T_e, mdotg_e, mdotf_e, vis_g, vis_f) = input_flow_data_function()
-(D, Ld, ks, teta) = input_pipe_data_function()
 
 
 '''
 =================================================================================
 TAKING SATURATION PRESSURE FROM BubbleP.py
-FOR MORE INFORMATION ABOUT BubbleP consult this BubbleP.py
+FOR MORE INFORMATION ABOUT Bubble Pressure consult BubbleP.py
 =================================================================================
 '''
 T = T_e
 LC, base = 99./100, 'mass' # <=============================== change here
 zin = np.array([LC, (1. - LC)])
 z, z_mass = Tools_Convert.frac_input(MM, zin, base)
+hR = hR_mass * prop_obj.calculate_weight_molar_mixture(MM, z, 'saturated_liquid')
+sR = sR_mass * prop_obj.calculate_weight_molar_mixture(MM, z, 'saturated_liquid')
 pG = 1.2 * bubble_obj.pressure_guess(T_e, z)
 pB, y, Sy, counter = bubble_obj(T_e, z)
 y_mass = Tools_Convert.convert_molarfrac_TO_massfrac(MM, y)
-
-
 MMixture = prop_obj.calculate_weight_molar_mixture(MM, z,"liquid")
 
+'''
+=================================================================================================================
+CREATING MORE NECESSARY OBJECTS
+=================================================================================================================
+'''
+eos_obj = PengRobinsonEos(pC, Tc, AcF, omega_a, omega_b, kij)
+hsFv_obj = HSFv(pC, TR, Tc, AcF, Cp, MM, hR, sR) #to obtain enthalpy
 
 
-T = T_e                   
+'''
+==================================================================================================================
+'''
+
 if __name__== '__main__':
     print('\n---------------------------------------------------')
     print('[1] - Guess pB [Pa]= %.8e' % pG)
@@ -166,11 +184,10 @@ hf = 419.06e3                       # J/kg @ [Tsat(P_amb)] - pg 529 - Ghiaasiaan
 dZdp = 0.                           # tx variacao fator compressibilidade do gás com a pressão
 Cp_g = 2.029e3                      # J/(kg K) @ [Tsat(P_amb)] - pg 532 - Ghiaasiaan
 Cp_f = np.einsum('i,i', z, Cp)      # J/(kg K) @ solução ideal (dados de Cp vindos de props)
-T_ref = 273.15                      # T_ref temperatura de referência [K]
-h_ref = 0.0                         # entalpia de referência  [J/kg] @ T_ref
-h_e = Cp_f * (T_e  - T_ref) + h_ref # Tenho que analisar melhor (considerei T* = 273.15K e h* = 0)
 Cv_g = Cp_g - R / MMixture          # Cv=Cp-R; dividido por MMixture para passar R para base massica @ [Tsat(P_amb)]
 Cv_f = Cp_f                         # Cv_f = Cp_f (aprox.)
+F_V, h_e, s_e = hsFv_obj(p_e, T_e, z) #Para obter a entalpia de entrada líquido subresfriado @ (p_e, T_e, z_e)
+
 
 
 
@@ -223,7 +240,7 @@ for int in np.arange(0, qtd_pontos):
     var = u[int], p[int], h[int] 
     resultado = systemEDOsinglePhase(var, Zduct, Gt, D, T, MMixture, vis_f, ks)
     rhof = prop_obj.calculate_density_phase(p[int], T, MM, z, "liquid")
-    Tresult = T_ref + (h[int] - h_ref) / Cp_f
+    Tresult = TR + (h[int] - hR_mass) / Cp_f
     print("Interactor = %i, dPdZ_singlephase = %.2f, Liquid Density = %.2f" % (int, resultado[2], rhof))
     print("Temperatura do escoamento", Tresult)
 
