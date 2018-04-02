@@ -8,12 +8,11 @@ def input_flow_data_function():
     '''
     THESE DATA FLOW HAVE BEEN GOTTEN FROM:_______     
     '''
-    room_pressure = 1.e5        # pressao ambiente [Pa]
-    temperature = 300.0                    #[K]
-    pressure = 15. * room_pressure           # pressão início duto [Pa]
-    visc_g = 12.02e-6                       #kg/(m s) @ [Tsat(P_amb)] - pg 529 - Ghiaasiaan
-    visc_f = 279e-6                         #kg/(m s) @ [Tsat(P_amb)] - pg 529 - Ghiaasiaan
-    gas_mass_flow = 0.                      #[kg/s]
-    liquid_mass_flow = 0.2                  #[kg/s]
+    room_pressure = 1.e5                    # -- pressao ambiente [Pa]
+    temperature = 300.0                     # -- temperatura de entrada [K]
+    pressure = 15. * room_pressure          # -- pressão entrada duto [Pa]
+    viscG = 12.02e-6                        # -- (@ satureted gas) [kg/(m s)]
+    viscF = 279e-6                          # -- (@ satureted liquid) [kg/(m s)]
+    subcooled_liquid_mass_flow = 0.2        # -- (subcooled liquid) [kg/(m s)]
 
-    return (pressure, temperature, gas_mass_flow, liquid_mass_flow, visc_g, visc_f)
+    return (pressure, temperature, subcooled_liquid_mass_flow, viscG, viscF)
