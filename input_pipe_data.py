@@ -11,6 +11,5 @@ def input_pipe_data_function():
     diameter = (4. / 5) * 25.4 / 1000    #[m] convert {in} to {m}
     lenght = 1.                    #[m]
     rugosity = 1.2e-3                 #[m]               
-    inclination = 70.0                 #[graus]
 
-    return (diameter, lenght, rugosity, inclination)
+    return (diameter, lenght, rugosity)
