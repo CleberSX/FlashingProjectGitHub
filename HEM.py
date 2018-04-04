@@ -11,6 +11,7 @@ from EOS_PengRobinson import PengRobinsonEos
 from EnthalpyEntropy import HSFv
 from input_flow_data import input_flow_data_function
 from input_pipe_data import input_pipe_data_function
+from TwoPhaseFlowTools_file import twoPhaseFlowTools_class
 
 #Constantes
 #g = 9.8                             # m/s^2
@@ -35,7 +36,7 @@ Sr = 1.
 #mdotT = mdotG + mdotF: tx massica total (kg/s)
 #D: diametro em inch transformado para metros [m]
 #Ld: comprimento total do duto [m]
-#deltaLd: quantidade divisoes do duto, ou seja, quantidade de Z steps [-]
+#pointsNumber + 1: quantidade divisoes do duto, ou seja, quantidade de Z steps [-]
 #rks: ugosidade absoluta [m]
 #teta: ângulo inclinação medido a partir da horizontal(+ para escoam. ascend.) [graus]
 #densL, densF, densG: subcooled liquid density [kg/m3], satureted liquid density [kg/m3], satureted gas density [kg/m3]
@@ -53,8 +54,8 @@ Sr = 1.
 #Sr = uG/uF: speed ratio
 #LC: light component (our refrigerant)
 #Z: compressibility factor --> [p*spvolG = (Z*R*T) / MM]
-#z_e: binary mixture composition at entrance: z_e = ([refrigerant]_e,[oil]_e) where [brackets]_e means concentration at entrance - [kg Refrig / kg mixture]_e
-#z: binary mixture composition at some positon: z = ([refrigerant],[oil]) 
+#xRe: binary mixture composition at entrance: xRe = ([refrigerant]_e,[oil]_e) where [brackets]_e means concentration at entrance - [kg Refrig / kg mixture]_e
+#xR: binary mixture composition at some positon: xR = ([refrigerant],[oil]) 
 #Zduct: duct length - [m]
 #f_D: Darcy friction factor
 #f_F: Fanning friction factor
@@ -89,6 +90,7 @@ CREATING NECESSARY OBJECT
 '''
 prop_obj = Properties(pC, Tc, AcF, omega_a, omega_b, kij)
 
+#print(prop_obj)
 
 '''
 =================================================================================
@@ -99,13 +101,13 @@ FOR MORE INFORMATION ABOUT Bubble Pressure consult BubbleP.py
 
 LC, base = 99./100, 'mass' # <=============================== change here
 zin = np.array([LC, (1. - LC)])
-z_e, z_mass_e = Tools_Convert.frac_input(MM, zin, base)
-hR = hR_mass * prop_obj.calculate_weight_molar_mixture(MM, z_e, 'saturated_liquid')
-sR = sR_mass * prop_obj.calculate_weight_molar_mixture(MM, z_e, 'saturated_liquid')
-pG = 1.2 * bubble_obj.pressure_guess(T_e, z_e)
-pB, y, Sy, counter = bubble_obj(T_e, z_e)
+xRe, xRe_mass = Tools_Convert.frac_input(MM, zin, base)
+hR = hR_mass * prop_obj.calculate_weight_molar_mixture(MM, xRe, 'saturated_liquid')
+sR = sR_mass * prop_obj.calculate_weight_molar_mixture(MM, xRe, 'saturated_liquid')
+pG = 1.2 * bubble_obj.pressure_guess(T_e, xRe)
+pB, y, Sy, counter = bubble_obj(T_e, xRe)
 y_mass = Tools_Convert.convert_molarfrac_TO_massfrac(MM, y)
-MMixture = prop_obj.calculate_weight_molar_mixture(MM, z_e,"liquid")
+MMixture = prop_obj.calculate_weight_molar_mixture(MM, xRe,"liquid")
 
 '''
 =================================================================================================================
@@ -127,8 +129,9 @@ if __name__== '__main__':
     print('[3] - Concentration vapor phase [molar] = ', y.round(3))
     print('[4] - Concentration vapor phase [mass] = ', y_mass.round(3))
     print('[5] - Pay attention if Sy is close to unity (Sy = %.10f) [molar]' % Sy)
-    print('[6] - Feed global {mass} fraction = ', z_mass_e.round(3))
-    print('[7] - Feed global {molar} fraction = ', z_e.round(3))
+    print('[6] - Feed global {mass} fraction = ', xRe_mass.round(3))
+    print('[7] - Feed global {molar} fraction = ', xRe.round(3))
+    print()
 
 
 
@@ -136,44 +139,27 @@ if __name__== '__main__':
 A = np.pi * np.power(D, 2) / 4      
 rug = ks / D
 Gt = mdotL_e / A  
-densL_e = prop_obj.calculate_density_phase(p_e, T_e, MM, z_e, "liquid") 
+densL_e = prop_obj.calculate_density_phase(p_e, T_e, MM, xRe, "liquid") 
 spvolL_e = np.power(densL_e,-1) 
 viscL = viscF        #<--- considerando que a visc do líquido subresfriado é igual ao do líquido saturado                                   
-deltaLd = 100                               
+                           
 
 
-#[3]================= CONDIÇÕES INICIAIS: u_init, x_init e p_init ===========
+'''
+=================================================================================================================
+CREATING ANOTHER NECESSARY OBJECT
+=================================================================================================================
+'''
+
+twoPhaseFlowTools_obj = twoPhaseFlowTools_class(MM, viscG, viscF, D, Gt)
+
+print(twoPhaseFlowTools_obj)
 
 
-
-def volumeEspecificoGas(p, T, MMixture):
-    return ( R * T / (p * MMixture))
-
-
-def volumeEspecificaBifasico(x, p, T, MMixture, spvolF):
-    spvolG = volumeEspecificoGas(p, T, MMixture)
-    return ((1.-x) * spvolF + x * spvolG)
-
-    
-def fracaoVazio(x, p, T, MMixture, spvolF):  # Eq 3.19, pg 37 Tese
-    spvolG = volumeEspecificoGas(p, T, MMixture)
-    spvolTP = volumeEspecificaBifasico(x, p, T, MMixture, spvolF)
-    return (spvolG * x / spvolTP)
-
-
-#[4]==PROPRIEDADES DE TRANSPORTE 
-def viscosidadeBifasica(x, p, T, MMixture, viscG, viscF, spvolF):
-    alfa = fracaoVazio(x, p, T, MMixture, spvolF)
-    return (alfa * viscG + viscF * (1. - alfa) * (1. + 2.5 * alfa))  #Eqc 8.33, pag 213 Ghiaasiaan
-
-
-def reynoldsBifasico(Gt, D, x, p, T, MMixture, viscG, viscF, spvolF):
-    viscTP = viscosidadeBifasica(x, p, T, MMixture, viscG, viscF, spvolF)
-    return (Gt * D / viscTP)
 
 
 #[5] == PROPRIEDADES CALOR & GÁS 
-CpL = np.einsum('i,i', z_e, Cp)     # -- capacidade térmica líquido subresfriado [J/(kg K)] (@ solução ideal)
+CpL = np.einsum('i,i', xRe, Cp)     # -- capacidade térmica líquido subresfriado [J/(kg K)] (@ solução ideal)
 
 
 
@@ -183,11 +169,13 @@ CpL = np.einsum('i,i', z_e, Cp)     # -- capacidade térmica líquido subresfria
 #source: The EDO's system wrote here was based on page 167  Ghiaasiaan
 # How to solve this system? See the page -->
 # --> https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.odeint.html
-def systemEDOsinglePhase(uph, Zduct, Gt, D, T, MMixture, viscL, ks):
+def systemEDOsinglePhase(uph, Zduct, Gt, D, MMixture, viscL, ks, h_e, T_e, CpL):
     u, p, h = uph
+    T = T_e + (h - h_e) / CpL
+    print('temperatura T = \t',T, 'temperatura T_e = \t', T_e)
     Gt2 = np.power(Gt, 2)
     Re_mon = Gt * D / viscL   
-    densL = prop_obj.calculate_density_phase(p, T, MM, z_e, "liquid")
+    densL = prop_obj.calculate_density_phase(p, T, MM, xRe, "liquid")
     spvolL = np.power(densL, -1) 
     
 
@@ -205,43 +193,50 @@ def systemEDOsinglePhase(uph, Zduct, Gt, D, T, MMixture, viscL, ks):
     matrizA = np.array([[A11,A12,A13],[A21,A22,A23],[A31,A32,A33]])
     RHS_C = np.array([C1, C2, C3])
     dudz, dpdz, dhdz = np.linalg.solve(matrizA, RHS_C)
-    return dudz, dpdz, dhdz 
+    return [dudz, dpdz, dhdz]
 
 
 
 #[7] ==============FUNÇÃO A SER INTEGRADA =================
 #source: https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.odeint.html
-Zduct = np.linspace(0, Ld, deltaLd + 1)
+
+#=================== CREATING VECTORS POINTS =============================
+pointsNumber = 100    
+Zduct = np.linspace(0, Ld, pointsNumber + 1)
+
+#==================== BUILDING INITIAL VALUES ============
 u_e = (mdotL_e * spvolL_e) / A                   # Para obter u_e (subcooled liquid)
-F_V, h_e, s_e = hsFv_obj(p_e, T_e, z_e)       #Para obter h_e (subcooled liquid, so F_V = 0)
+F_V, h_e, s_e = hsFv_obj(p_e, T_e, xRe)       #Para obter h_e (subcooled liquid, so F_V = 0)
+uph_0 = [u_e, p_e, h_e]
 
 
 
-uph_init = u_e, p_e, h_e
-uph_singlephase = integrate.odeint(systemEDOsinglePhase, uph_init, Zduct, args=(Gt, D, T_e, MMixture, viscL, ks))
+#===================== INTEGRATION ========================
+
+uph_singlephase = integrate.odeint(systemEDOsinglePhase, uph_0, Zduct, args=(Gt, D, MMixture, viscL, ks, h_e, T_e, CpL))
 
 
 
-#[8] ============== EXTRAINDO RESULTADOS =================
+
+
+# #[8] ================= TAKING THE RESULTS =================
 u = uph_singlephase[:,0]
 p = uph_singlephase[:,1]
 h = uph_singlephase[:,2]
 pB_v = pB * np.ones_like(Zduct)
-
-
-qtd_pontos = Zduct.shape[0]
-for int in np.arange(0, qtd_pontos):
-    var = u[int], p[int], h[int] 
-    resultado = systemEDOsinglePhase(var, Zduct, Gt, D, T_e, MMixture, viscL, ks)
-    densL = prop_obj.calculate_density_phase(p[int], T_e, MM, z_e, "liquid")
-    T = TR + (h[int] - hR_mass) / CpL
-    #print("Interactor = %i, dPdZ_singlephase = %.2f, Liquid Density = %.2f" % (int, resultado[2], densL))
-    print("Temperatura do escoamento", T)
+alfa = twoPhaseFlowTools_obj.fracaoVazio(0.01, p,T_e,MMixture, spvolL_e)
 
 
 
+# #[9]=========================== PLOT =====================
 
-#[8]=========================== GRÁFICOS =====================
+plt.figure(figsize=(7,5))
+#plt.ylim(20,120)
+plt.xlabel('Z [m]')
+plt.ylabel('Void Fraction')
+plt.plot(Zduct, alfa)
+plt.legend(['Fração de Vazio'], loc=3)
+
 
 plt.figure(figsize=(7,5))
 #plt.ylim(20,120)
