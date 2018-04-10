@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import logging
 import numpy as np 
 from scipy import integrate, optimize
 import matplotlib.pyplot as plt
@@ -12,6 +13,15 @@ from EnthalpyEntropy import HSFv
 from input_flow_data import input_flow_data_function
 from input_pipe_data import input_pipe_data_function
 from TwoPhaseFlowTools_file import twoPhaseFlowTools_class
+
+
+#1st OPTION:
+logging.basicConfig(level=logging.DEBUG, format=' %(asctime)s - %(levelname)s - %(message)s')
+#2nd OPTION
+#logging.basicConfig(filename='Cleber_File.txt', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+#logging.disable(logging.CRITICAL)
+
+
 
 #Constantes
 #g = 9.8                             # m/s^2
@@ -89,7 +99,6 @@ CREATING NECESSARY OBJECT
 =================================================================================================================
 '''
 prop_obj = Properties(pC, Tc, AcF, omega_a, omega_b, kij)
-
 #print(prop_obj)
 
 '''
@@ -152,16 +161,7 @@ CREATING ANOTHER NECESSARY OBJECT
 '''
 
 twoPhaseFlowTools_obj = twoPhaseFlowTools_class(MM, viscG, viscF, D, Gt)
-
-print(twoPhaseFlowTools_obj)
-
-
-
-
-#[5] == PROPRIEDADES CALOR & GÁS 
-CpL = np.einsum('i,i', xRe, Cp)     # -- capacidade térmica líquido subresfriado [J/(kg K)] (@ solução ideal)
-
-
+#print(twoPhaseFlowTools_obj)
 
 
 
@@ -169,17 +169,32 @@ CpL = np.einsum('i,i', xRe, Cp)     # -- capacidade térmica líquido subresfria
 #source: The EDO's system wrote here was based on page 167  Ghiaasiaan
 # How to solve this system? See the page -->
 # --> https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.odeint.html
-def systemEDOsinglePhase(uph, Zduct, Gt, D, MMixture, viscL, ks, h_e, T_e, CpL):
+def systemEDOsinglePhase(uph, Zduct, Gt, D, MMixture, viscL, ks, h_e, T_e, Cp, xRe):
+    '''
+    [1] - Objetivo: resolver um sistema de EDO's das derivadas velocidade, presssão e entalpia com o uso da ferramenta linalg.solve;
+    [2] - Input: vetor comprimento duto (Zduct), fluxo mássico total baseado na área entrada (Gt), diâmetro (D), 
+    peso molecular da mixtura (MMixture), viscosidade da líquido (viscL), rugosidade absoluta (ks), 
+    entalpia entrada duto (h_e), temperatura entrada duto (T_e), vetor capacidade calorífica
+    com os 2 componentes (Cp), concentração do refrigerante na entrada duto (xRe)
+    [3] - Output: du/dz, dp/dz e dh/dz
+    '''
+ 
     u, p, h = uph
+    CpL = np.einsum('i,i', xRe, Cp)  # -- capacidade térmica líquido subresfriado [J/(kg K)] (@ solução ideal)
     T = T_e + (h - h_e) / CpL
-    print('temperatura T = \t',T, 'temperatura T_e = \t', T_e)
     Gt2 = np.power(Gt, 2)
     Re_mon = Gt * D / viscL   
+    
     densL = prop_obj.calculate_density_phase(p, T, MM, xRe, "liquid")
     spvolL = np.power(densL, -1) 
     
+    
+    dT = T-T_e
+    spvolLdT = (spvolL - spvolL_e) / dT
+    beta = ((densL + densL_e) / 2) * spvolLdT
+    print('Z == ', Zduct, 'valor de Beta/CpL =>', (beta/CpL) )
 
-    A11, A12, A13 = np.power(u,-1), 0., 1.e-5    
+    A11, A12, A13 = np.power(u,-1), 0., 1e-5     
     A21, A22, A23 = u, spvolL, 0.
     A31, A32, A33 = u, 0., 1.
         
@@ -195,14 +210,15 @@ def systemEDOsinglePhase(uph, Zduct, Gt, D, MMixture, viscL, ks, h_e, T_e, CpL):
     dudz, dpdz, dhdz = np.linalg.solve(matrizA, RHS_C)
     return [dudz, dpdz, dhdz]
 
-
+ 
 
 #[7] ==============FUNÇÃO A SER INTEGRADA =================
 #source: https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.odeint.html
 
 #=================== CREATING VECTORS POINTS =============================
-pointsNumber = 100    
+pointsNumber = 1000
 Zduct = np.linspace(0, Ld, pointsNumber + 1)
+
 
 #==================== BUILDING INITIAL VALUES ============
 u_e = (mdotL_e * spvolL_e) / A                   # Para obter u_e (subcooled liquid)
@@ -213,9 +229,7 @@ uph_0 = [u_e, p_e, h_e]
 
 #===================== INTEGRATION ========================
 
-uph_singlephase = integrate.odeint(systemEDOsinglePhase, uph_0, Zduct, args=(Gt, D, MMixture, viscL, ks, h_e, T_e, CpL))
-
-
+uph_singlephase = integrate.odeint(systemEDOsinglePhase, uph_0, Zduct, args=(Gt, D, MMixture, viscL, ks, h_e, T_e, Cp, xRe))
 
 
 
@@ -226,41 +240,41 @@ h = uph_singlephase[:,2]
 pB_v = pB * np.ones_like(Zduct)
 alfa = twoPhaseFlowTools_obj.fracaoVazio(0.01, p,T_e,MMixture, spvolL_e)
 
-
+logging.debug('entalpia h = ' + str(alfa))
 
 # #[9]=========================== PLOT =====================
 
-plt.figure(figsize=(7,5))
-#plt.ylim(20,120)
-plt.xlabel('Z [m]')
-plt.ylabel('Void Fraction')
-plt.plot(Zduct, alfa)
-plt.legend(['Fração de Vazio'], loc=3)
+# plt.figure(figsize=(7,5))
+# #plt.ylim(20,120)
+# plt.xlabel('Z [m]')
+# plt.ylabel('Void Fraction')
+# plt.plot(Zduct, alfa)
+# plt.legend(['Fração de Vazio'], loc=3)
 
 
-plt.figure(figsize=(7,5))
-#plt.ylim(20,120)
-plt.xlabel('Z [m]')
-plt.ylabel('u [m/s]')
-plt.plot(Zduct, u)
-plt.legend(['$u_{incompressivel}$ ao longo do duto'], loc=1) #loc=2 vai para canto sup esq
+# plt.figure(figsize=(7,5))
+# #plt.ylim(20,120)
+# plt.xlabel('Z [m]')
+# plt.ylabel('u [m/s]')
+# plt.plot(Zduct, u)
+# plt.legend(['$u_{incompressivel}$ ao longo do duto'], loc=1) #loc=2 vai para canto sup esq
 
 
-plt.figure(figsize=(7,5))
-#plt.ylim(20,120)
-plt.xlabel('Z [m]')
-plt.ylabel('P [Pascal]')
-plt.plot(Zduct, p)
-plt.plot(Zduct, pB_v)
-plt.legend(['Pressao Esc. Incompressivel', 'Pressão Saturação'], loc=3)
+# plt.figure(figsize=(7,5))
+# #plt.ylim(20,120)
+# plt.xlabel('Z [m]')
+# plt.ylabel('P [Pascal]')
+# plt.plot(Zduct, p)
+# plt.plot(Zduct, pB_v)
+# plt.legend(['Pressao Esc. Incompressivel', 'Pressão Saturação'], loc=3)
 
-plt.figure(figsize=(7,5))
-#plt.ylim(20,120)
-plt.xlabel('Z [m]')
-plt.ylabel('H [J/kg]')
-plt.plot(Zduct, h)
-plt.legend(['$h_{incompressivel}$ ao longo do duto'], loc=3)
+# plt.figure(figsize=(7,5))
+# #plt.ylim(20,120)
+# plt.xlabel('Z [m]')
+# plt.ylabel('H [J/kg]')
+# plt.plot(Zduct, h)
+# plt.legend(['$h_{incompressivel}$ ao longo do duto'], loc=3)
 
 
-plt.show()
-plt.close('all')
+# plt.show()
+# plt.close('all')
