@@ -82,7 +82,7 @@ class Properties(PengRobinsonEos):
         xjmj = np.einsum('j,j->j', x, m) #[appears in 5.82]
         xixjmj = np.einsum('i,j', x, xjmj) #[appears in 5.82]
         xixjmj_SQRT_aiacjTrj = np.einsum('ij,ij->ij', xixjmj, np.sqrt(aiacjTrj)) #[appears in 5.82]
-        self.TdadT = - np.einsum('ij,ij->', xixjmj_SQRT_aiacjTrj, (1-κ_ij)) #[5.82]
+        self.TdadT = (-1) * np.einsum('ij,ij->', xixjmj_SQRT_aiacjTrj, (1-κ_ij)) #[5.82]
 
         #[a] - Building parameter "a" given by equation [5.68] - pg 60
         SQRTaiaj = np.sqrt( np.einsum('i,j', ai, ai) ) #[appears in 5.68]
