@@ -2,6 +2,7 @@
 import logging
 import numpy as np 
 from scipy import integrate, optimize
+from scipy.misc import derivative
 import matplotlib.pyplot as plt
 import Tools_Convert
 from InputData___ReadThisFile import props
@@ -12,7 +13,7 @@ from EOS_PengRobinson import PengRobinsonEos
 from EnthalpyEntropy import HSFv
 from input_flow_data import input_flow_data_function
 from input_pipe_data import input_pipe_data_function
-from TwoPhaseFlowTools_file import twoPhaseFlowTools_class
+from FlowTools_file import FlowTools_class
 
 
 #1st OPTION:
@@ -53,8 +54,9 @@ Sr = 1.
 #spvolL, spvolF, spvolG: specific volume subcooled liquid [m3/kg], specific volume satureted liquid [m3/kg], specific volume satureted gas [m3/kg]
 #densL_e, spvolL_e: subcooled liquid density at duct entrance [kg/m3], specific volume subcooled liquid at duct entrance [m3/kg] 
 #spvolTP: specific volume two-phase [m3/kg]
-#viscF: viscosidade do líquido saturado [k/(m.s)] {@ saturation}
-#visG: viscosidade do gás saturado [k/(m.s)] {@ saturation}
+#viscL: viscosidade do líquido subresfriado [kg/(m.s)] 
+#viscF: viscosidade do líquido saturado [kg/(m.s)] {@ saturation}
+#visG: viscosidade do gás saturado [kg/(m.s)] {@ saturation}
 #Gt: fluxo massico superficial total ((kg/s)/m2)
 #rug = ks/D: rugosidade relativa [-]
 #A: área transversal duto [m2]
@@ -64,8 +66,8 @@ Sr = 1.
 #Sr = uG/uF: speed ratio
 #LC: light component (our refrigerant)
 #Z: compressibility factor --> [p*spvolG = (Z*R*T) / MM]
-#xRe: binary mixture composition at entrance: xRe = ([refrigerant]_e,[oil]_e) where [brackets]_e means concentration at entrance - [kg Refrig / kg mixture]_e
-#xR: binary mixture composition at some positon: xR = ([refrigerant],[oil]) 
+#xRe: vector binary mixture molar composition at pipe's entrance: xRe = ([refrigerant]_e,[oil]_e) 
+#xR: vector binary mixture molar composition at some pipe's positon: xR = ([refrigerant],[oil]) 
 #Zduct: duct length - [m]
 #f_D: Darcy friction factor
 #f_F: Fanning friction factor
@@ -73,8 +75,8 @@ Sr = 1.
 # hR: reference enthalpy (in molar base) [J/kmol]
 # sR_mass: reference entropy in mass base [J/kg K]
 # sR: reference entropy (in molar base) [J/kmol K]
-
-
+# CpL: subcooled liquid's specific heat [J/(kg K)] -- CpL = np.eisum('i,i', xRe, Cp)
+# Cp: vector components' specific heat, which Cp1= Cp[0] and Cp2 = Cp[1]
 '''
 =================================================================================
                                 INPUT DATA
@@ -89,7 +91,7 @@ Sr = 1.
 '''
 (pC, Tc, AcF, MM, omega_a, omega_b, kij, Cp) = props
 (TR, hR_mass, sR_mass) = input_reference_values_function()
-(p_e, T_e, mdotL_e, viscG, viscF) = input_flow_data_function() # <=============================== change here
+(p_e, T_e, mdotL_e, viscG, viscR, viscO) = input_flow_data_function() # <=============================== change here
 (D, Ld, ks) = input_pipe_data_function() # <=============================== change here
 
 
@@ -150,7 +152,7 @@ rug = ks / D
 Gt = mdotL_e / A  
 densL_e = prop_obj.calculate_density_phase(p_e, T_e, MM, xRe, "liquid") 
 spvolL_e = np.power(densL_e,-1) 
-viscL = viscF        #<--- considerando que a visc do líquido subresfriado é igual ao do líquido saturado                                   
+
                            
 
 
@@ -160,7 +162,8 @@ CREATING ANOTHER NECESSARY OBJECT
 =================================================================================================================
 '''
 
-twoPhaseFlowTools_obj = twoPhaseFlowTools_class(MM, viscG, viscF, D, Gt)
+FlowTools_obj = FlowTools_class(viscG, viscR, viscO, D, Gt)
+viscL = FlowTools_obj.viscosidadeMonofasico(xRe)
 #print(twoPhaseFlowTools_obj)
 
 
@@ -171,38 +174,49 @@ twoPhaseFlowTools_obj = twoPhaseFlowTools_class(MM, viscG, viscF, D, Gt)
 # --> https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.odeint.html
 def systemEDOsinglePhase(uph, Zduct, Gt, D, MMixture, viscL, ks, h_e, T_e, Cp, xRe):
     '''
-    [1] - Objetivo: resolver um sistema de EDO's das derivadas velocidade, presssão e entalpia com o uso da ferramenta linalg.solve;
-    [2] - Input: vetor comprimento duto (Zduct), fluxo mássico total baseado na área entrada (Gt), diâmetro (D), 
-    peso molecular da mixtura (MMixture), viscosidade da líquido (viscL), rugosidade absoluta (ks), 
-    entalpia entrada duto (h_e), temperatura entrada duto (T_e), vetor capacidade calorífica
-    com os 2 componentes (Cp), concentração do refrigerante na entrada duto (xRe)
+    [1] - Objetivo: resolver um sistema de EDO's das derivadas velocidade, presssão e entalpia com o uso da ferramenta linalg.solve; \t
+    [2] - Input: \t
+        [2.a] vetor comprimento duto (Zduct) \t
+        [2.b] fluxo mássico total baseado na área entrada (Gt) \t
+        [2.c] diâmetro (D) \t
+        [2.d] peso molecular da mixtura (MMixture) \t
+        [2.e] viscosidade da líquido (viscL) \t
+        [2.f] rugosidade absoluta (ks) \t
+        [2.g] entalpia entrada duto (h_e) \t
+        [2.h] temperatura entrada duto (T_e) \t
+        [2.i] vetor calor específico (Cp = ([CpR, CpO])) \t
+        [2.j] vetor concentração molar entrada duto (  xRe = ([xR, xO])  ) \t
     [3] - Output: du/dz, dp/dz e dh/dz
     '''
  
     u, p, h = uph
-    CpL = np.einsum('i,i', xRe, Cp)  # -- capacidade térmica líquido subresfriado [J/(kg K)] (@ solução ideal)
+    CpL = np.einsum('i,i', xRe, Cp)  
     T = T_e + (h - h_e) / CpL
     Gt2 = np.power(Gt, 2)
     Re_mon = Gt * D / viscL   
     
+    densL_e = prop_obj.calculate_density_phase(p_e, T_e, MM, xRe, "liquid")
+    spvolL_e = np.power(densL_e, -1) 
     densL = prop_obj.calculate_density_phase(p, T, MM, xRe, "liquid")
     spvolL = np.power(densL, -1) 
     
-    
-    dT = T-T_e
-    spvolLdT = (spvolL - spvolL_e) / dT
-    beta = ((densL + densL_e) / 2) * spvolLdT
-    print('Z == ', Zduct, 'valor de Beta/CpL =>', (beta/CpL) )
+    if (T-T_e) != 0: dT = (T - T_e) 
+    else: dT = 1e-6                 #avoid division by zero
 
-    A11, A12, A13 = np.power(u,-1), 0., 1e-5     
+    spvolLdT = (spvolL - spvolL_e) / dT
+    beta = ((densL + densL_e) / 2) * spvolLdT #appears at mass conservation (eq. 3.33) and EDO's matrix (eq. 3.40)
+    
+
+    A11, A12, A13 = np.power(u,-1), 0., (-beta / CpL)     
     A21, A22, A23 = u, spvolL, 0.
     A31, A32, A33 = u, 0., 1.
-        
-    colebrook = lambda f0 : 1.14 - 2. * np.log10(ks / D + 9.35 / (Re_mon * np.sqrt(f0)))-1 / np.sqrt(f0)
-    f_D = optimize.newton(colebrook, 0.02)  #fator atrito de Darcy
-    f_F = f_D / 4.                          #fator atrito de Fanning
 
-    C1, C2, C3 = 0., -2 * Gt2 * spvolL * (f_F / D), -2 * Gt2 * spvolL * (f_F / D)
+    colebrook = lambda f0 : 1.14 - 2. * np.log10(ks / D + 9.35 / (Re_mon * np.sqrt(f0))) -1 / np.sqrt(f0)
+    f_D = optimize.newton(colebrook, 0.02)  #Darcy friction factor
+    f_F = f_D / 4.                          #Fanning friction factor
+
+    aux = -2 * Gt2 * spvolL * (f_F / D)
+    C1, C2, C3 = 0., aux, aux
     
     
     matrizA = np.array([[A11,A12,A13],[A21,A22,A23],[A31,A32,A33]])
@@ -238,11 +252,32 @@ u = uph_singlephase[:,0]
 p = uph_singlephase[:,1]
 h = uph_singlephase[:,2]
 pB_v = pB * np.ones_like(Zduct)
-alfa = twoPhaseFlowTools_obj.fracaoVazio(0.01, p,T_e,MMixture, spvolL_e)
+alfa = FlowTools_obj.fracaoVazio(0.01, p,T_e,MMixture, spvolL_e)
 
 logging.debug('entalpia h = ' + str(alfa))
 
+
+CpL = np.einsum('i,i', xRe, Cp)  # -- capacidade térmica líquido subresfriado [J/(kg K)] (@ solução ideal)
+T = T_e + (h - h_e) / CpL
+
+
+
+
+
+
+
+
+
+
 # #[9]=========================== PLOT =====================
+
+
+# plt.figure(figsize=(7,5))
+# #plt.ylim(20,120)
+# plt.xlabel('Z [m]')
+# plt.ylabel('T [K]')
+# plt.plot(Zduct, T)
+# plt.legend(['Temperatura Esc. Incompressivel'], loc=3)
 
 # plt.figure(figsize=(7,5))
 # #plt.ylim(20,120)
@@ -260,13 +295,13 @@ logging.debug('entalpia h = ' + str(alfa))
 # plt.legend(['$u_{incompressivel}$ ao longo do duto'], loc=1) #loc=2 vai para canto sup esq
 
 
-# plt.figure(figsize=(7,5))
-# #plt.ylim(20,120)
-# plt.xlabel('Z [m]')
-# plt.ylabel('P [Pascal]')
-# plt.plot(Zduct, p)
-# plt.plot(Zduct, pB_v)
-# plt.legend(['Pressao Esc. Incompressivel', 'Pressão Saturação'], loc=3)
+plt.figure(figsize=(7,5))
+#plt.ylim(20,120)
+plt.xlabel('Z [m]')
+plt.ylabel('P [Pascal]')
+plt.plot(Zduct, p)
+plt.plot(Zduct, pB_v)
+plt.legend(['Pressao Esc. Incompressivel', 'Pressão Saturação'], loc=3)
 
 # plt.figure(figsize=(7,5))
 # #plt.ylim(20,120)
@@ -276,5 +311,5 @@ logging.debug('entalpia h = ' + str(alfa))
 # plt.legend(['$h_{incompressivel}$ ao longo do duto'], loc=3)
 
 
-# plt.show()
-# plt.close('all')
+plt.show()
+plt.close('all')
