@@ -16,10 +16,12 @@ def input_flow_data_function():
 
     room_pressure = 1.e5                    # -- pressao ambiente [Pa]
     temperature = 300.0                     # -- temperatura de entrada [K]
-    pressure = 15. * room_pressure          # -- pressão entrada duto [Pa]
+    pressure = 20. * room_pressure          # -- pressão entrada duto [Pa]
     viscG = 12.02e-6                        # -- (@ saturated gas) [kg/(m s)]
     viscR = 279e-6                          # -- (@ saturated liquid refrigerant's dynamic viscosity ) [kg/(m s)]
-    viscO =  279e2                               # -- (@ oil's dynamic viscosity ) [kg/(m s)]
-    subcooled_liquid_mass_flow = 0.2        # -- (mass ratio subcooled liquid) [kg/s]
+    viscO =  279e-2                               # -- (@ oil's dynamic viscosity ) [kg/(m s)]
+    subcooled_liquid_mass_flow = 0.12        # -- (mass ratio subcooled liquid) [kg/s]
 
     return (pressure, temperature, subcooled_liquid_mass_flow, viscG, viscR, viscO)
+
+
