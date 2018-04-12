@@ -12,7 +12,8 @@ from Properties import Properties
 from EOS_PengRobinson import PengRobinsonEos
 from EnthalpyEntropy import HSFv
 from input_flow_data import input_flow_data_function
-from input_pipe_data import input_pipe_data_function
+from input_pipe_data import input_pipe_data_function as pipe
+from input_pipe_data import areaVenturiPipe_function as Area
 from FlowTools_file import FlowTools_class
 
 
@@ -45,11 +46,6 @@ Sr = 1.
 #pB_v: é o próprio pB, porém na forma vetorial 
 #x_e: título de vapor entrada duto [-]
 #mdotT = mdotG + mdotF: tx massica total (kg/s)
-#D: diametro em inch transformado para metros [m]
-#Ld: comprimento total do duto [m]
-#pointsNumber + 1: quantidade divisoes do duto, ou seja, quantidade de Z steps [-]
-#rks: ugosidade absoluta [m]
-#teta: ângulo inclinação medido a partir da horizontal(+ para escoam. ascend.) [graus]
 #densL, densF, densG: subcooled liquid density [kg/m3], satureted liquid density [kg/m3], satureted gas density [kg/m3]
 #spvolL, spvolF, spvolG: specific volume subcooled liquid [m3/kg], specific volume satureted liquid [m3/kg], specific volume satureted gas [m3/kg]
 #densL_e, spvolL_e: subcooled liquid density at duct entrance [kg/m3], specific volume subcooled liquid at duct entrance [m3/kg] 
@@ -58,8 +54,6 @@ Sr = 1.
 #viscF: viscosidade do líquido saturado [kg/(m.s)] {@ saturation}
 #visG: viscosidade do gás saturado [kg/(m.s)] {@ saturation}
 #Gt: fluxo massico superficial total ((kg/s)/m2)
-#rug = ks/D: rugosidade relativa [-]
-#A: área transversal duto [m2]
 #u: flow speed [m/s]
 #uG: satureted gas speed [m/s]
 #uF: satureted liquid speed [m/s]
@@ -77,6 +71,20 @@ Sr = 1.
 # sR: reference entropy (in molar base) [J/kmol K]
 # CpL: subcooled liquid's specific heat [J/(kg K)] -- CpL = np.eisum('i,i', xRe, Cp)
 # Cp: vector components' specific heat, which Cp1= Cp[0] and Cp2 = Cp[1]
+# D: diametro em metros [m]
+# Ld: comprimento total do duto [m]
+# pointsNumber: quantidade divisoes do duto, ou seja, quantidade de Z steps [-]
+# ks: absolut rugosity [m]
+# rug = ks/D: rugosidade relativa [-]
+# angleVenturi_in: entrance venturi angle [rad]
+# angleVenturi_out: outlet venturi angle [rad]  
+# Dvt: venturi throat diameter [m] 
+# ziv: coordinate where venturi begins [m] 
+# zig: coordinate where venturi throat begins [m] 
+# zfg: coordinate where venturi throat ends [m] 
+# zfv: coordinate where venturi ends [m] 
+# Ac: cross area section [m2] -- valid for any duct position, including z position inside venturi, i.e., Ac = Ac(z) 
+# Ac_pipe: pipe cross area section [m2] -- valid just for pipe area; so, can be calculated at pipe entrance, z = 0
 '''
 =================================================================================
                                 INPUT DATA
@@ -92,7 +100,7 @@ Sr = 1.
 (pC, Tc, AcF, MM, omega_a, omega_b, kij, Cp) = props
 (TR, hR_mass, sR_mass) = input_reference_values_function()
 (p_e, T_e, mdotL_e, viscG, viscR, viscO) = input_flow_data_function() # <=============================== change here
-(D, Ld, ks) = input_pipe_data_function() # <=============================== change here
+(angleVenturi_in, angleVenturi_out, ks, Ld, D, Dvt, ziv, zig, zfg, zfv) = pipe() # <=============================== change here
 
 
 '''
@@ -133,23 +141,23 @@ hsFv_obj = HSFv(pC, TR, Tc, AcF, Cp, MM, hR, sR) #to obtain enthalpy
 ==================================================================================================================
 '''
 
-if __name__== '__main__':
-    print('\n---------------------------------------------------')
-    print('[1] - Guess pB [Pa]= %.8e' % pG)
-    print('[2] - ======> at T = %.2f [C], pB = %.8e [Pa] ' % ((T_e - 273.15), pB) + '\n')
-    print('[3] - Concentration vapor phase [molar] = ', y.round(3))
-    print('[4] - Concentration vapor phase [mass] = ', y_mass.round(3))
-    print('[5] - Pay attention if Sy is close to unity (Sy = %.10f) [molar]' % Sy)
-    print('[6] - Feed global {mass} fraction = ', xRe_mass.round(3))
-    print('[7] - Feed global {molar} fraction = ', xRe.round(3))
-    print()
+# if __name__== '__main__':
+#     print('\n---------------------------------------------------')
+#     print('[1] - Guess pB [Pa]= %.8e' % pG)
+#     print('[2] - ======> at T = %.2f [C], pB = %.8e [Pa] ' % ((T_e - 273.15), pB) + '\n')
+#     print('[3] - Concentration vapor phase [molar] = ', y.round(3))
+#     print('[4] - Concentration vapor phase [mass] = ', y_mass.round(3))
+#     print('[5] - Pay attention if Sy is close to unity (Sy = %.10f) [molar]' % Sy)
+#     print('[6] - Feed global {mass} fraction = ', xRe_mass.round(3))
+#     print('[7] - Feed global {molar} fraction = ', xRe.round(3))
+#     print()
 
 
 
-#[2]========== OUTRAS CONSTANTES + CÁLCULO SIMPLES ===========
-A = np.pi * np.power(D, 2) / 4      
+#[2]========== OUTRAS CONSTANTES + CÁLCULO SIMPLES ===========    
+Ac_pipe = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, 0.0)
 rug = ks / D
-Gt = mdotL_e / A  
+Gt = mdotL_e / Ac_pipe
 densL_e = prop_obj.calculate_density_phase(p_e, T_e, MM, xRe, "liquid") 
 spvolL_e = np.power(densL_e,-1) 
 
@@ -172,7 +180,8 @@ viscL = FlowTools_obj.viscosidadeMonofasico(xRe)
 #source: The EDO's system wrote here was based on page 167  Ghiaasiaan
 # How to solve this system? See the page -->
 # --> https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.odeint.html
-def systemEDOsinglePhase(uph, Zduct, Gt, D, MMixture, viscL, ks, h_e, T_e, Cp, xRe):
+
+def systemEDOsinglePhase(uph, Zduct, Gt, D, MMixture, viscL, ks, h_e, T_e, Cp, xRe, deltaZ):
     '''
     [1] - Objetivo: resolver um sistema de EDO's das derivadas velocidade, presssão e entalpia com o uso da ferramenta linalg.solve; \t
     [2] - Input: \t
@@ -200,14 +209,21 @@ def systemEDOsinglePhase(uph, Zduct, Gt, D, MMixture, viscL, ks, h_e, T_e, Cp, x
     densL = prop_obj.calculate_density_phase(p, T, MM, xRe, "liquid")
     spvolL = np.power(densL, -1) 
     
-    if (T-T_e) != 0: dT = (T - T_e) 
-    else: dT = 1e-6                 #avoid division by zero
+    if (T-T_e) != 0: deltaT = (T - T_e) 
+    else: deltaT = 1e-6                 #avoid division by zero
 
-    spvolLdT = (spvolL - spvolL_e) / dT
+    spvolLdT = (spvolL - spvolL_e) / deltaT
     beta = ((densL + densL_e) / 2) * spvolLdT #appears at mass conservation (eq. 3.33) and EDO's matrix (eq. 3.40)
     
+    A1st = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, Zduct)
+    A2nd = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, Zduct + deltaZ)
+    deltaA = A2nd - A1st
+    avrgA = (A2nd + A1st) / 2
+    dAdZ = deltaA / deltaZ
+    print('Z = ', Zduct, 'dAdZ', dAdZ, file=fh)
 
-    A11, A12, A13 = np.power(u,-1), 0., (-beta / CpL)     
+
+    A11, A12, A13 = np.power(u,-1), 0., (- beta / CpL)     
     A21, A22, A23 = u, spvolL, 0.
     A31, A32, A33 = u, 0., 1.
 
@@ -216,7 +232,7 @@ def systemEDOsinglePhase(uph, Zduct, Gt, D, MMixture, viscL, ks, h_e, T_e, Cp, x
     f_F = f_D / 4.                          #Fanning friction factor
 
     aux = -2 * Gt2 * spvolL * (f_F / D)
-    C1, C2, C3 = 0., aux, aux
+    C1, C2, C3 = (- dAdZ / avrgA), aux, aux
     
     
     matrizA = np.array([[A11,A12,A13],[A21,A22,A23],[A31,A32,A33]])
@@ -230,21 +246,30 @@ def systemEDOsinglePhase(uph, Zduct, Gt, D, MMixture, viscL, ks, h_e, T_e, Cp, x
 #source: https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.odeint.html
 
 #=================== CREATING VECTORS POINTS =============================
-pointsNumber = 1000
-Zduct = np.linspace(0, Ld, pointsNumber + 1)
+pointsNumber = 5000
+Zduct, deltaZ = np.linspace(0, Ld, pointsNumber + 1, retstep=True)
+
+# for j in Zduct:
+#     if j == Ld:
+#         break
+#     Ac1 = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, j)
+#     Ac2 = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, j + deltaZ)
+#     deltaAc = Ac2 - Ac1
+#     #if deltaAc != 0.0:
+#     print('valor de z = ', j + deltaZ, 'variação de área', deltaAc)
 
 
 #==================== BUILDING INITIAL VALUES ============
-u_e = (mdotL_e * spvolL_e) / A                   # Para obter u_e (subcooled liquid)
+u_e = (mdotL_e * spvolL_e) / Ac_pipe                  # Para obter u_e (subcooled liquid)
 F_V, h_e, s_e = hsFv_obj(p_e, T_e, xRe)       #Para obter h_e (subcooled liquid, so F_V = 0)
 uph_0 = [u_e, p_e, h_e]
 
 
 
 #===================== INTEGRATION ========================
-
-uph_singlephase = integrate.odeint(systemEDOsinglePhase, uph_0, Zduct, args=(Gt, D, MMixture, viscL, ks, h_e, T_e, Cp, xRe))
-
+fh = open("saida_.txt","w")
+uph_singlephase = integrate.odeint(systemEDOsinglePhase, uph_0, Zduct, args=(Gt, D, MMixture, viscL, ks, h_e, T_e, Cp, xRe, deltaZ))
+fh.close()
 
 
 # #[8] ================= TAKING THE RESULTS =================
@@ -252,13 +277,12 @@ u = uph_singlephase[:,0]
 p = uph_singlephase[:,1]
 h = uph_singlephase[:,2]
 pB_v = pB * np.ones_like(Zduct)
-alfa = FlowTools_obj.fracaoVazio(0.01, p,T_e,MMixture, spvolL_e)
-
-logging.debug('entalpia h = ' + str(alfa))
+#alfa = FlowTools_obj.fracaoVazio(0.01, p,T_e,MMixture, spvolL_e)
 
 
 CpL = np.einsum('i,i', xRe, Cp)  # -- capacidade térmica líquido subresfriado [J/(kg K)] (@ solução ideal)
 T = T_e + (h - h_e) / CpL
+
 
 
 
@@ -279,24 +303,18 @@ T = T_e + (h - h_e) / CpL
 # plt.plot(Zduct, T)
 # plt.legend(['Temperatura Esc. Incompressivel'], loc=3)
 
-# plt.figure(figsize=(7,5))
-# #plt.ylim(20,120)
-# plt.xlabel('Z [m]')
-# plt.ylabel('Void Fraction')
-# plt.plot(Zduct, alfa)
-# plt.legend(['Fração de Vazio'], loc=3)
 
-
-# plt.figure(figsize=(7,5))
-# #plt.ylim(20,120)
-# plt.xlabel('Z [m]')
-# plt.ylabel('u [m/s]')
-# plt.plot(Zduct, u)
-# plt.legend(['$u_{incompressivel}$ ao longo do duto'], loc=1) #loc=2 vai para canto sup esq
+plt.figure(figsize=(7,5))
+plt.xlim(0.6,0.8)
+plt.xlabel('Z [m]')
+plt.ylabel('u [m/s]')
+plt.plot(Zduct, u)
+plt.legend(['$u_{incompressivel}$ ao longo do duto'], loc=1) #loc=2 vai para canto sup esq
 
 
 plt.figure(figsize=(7,5))
-#plt.ylim(20,120)
+plt.xlim(0.675,0.725)
+plt.ylim(12.5e5, 13.5e5)
 plt.xlabel('Z [m]')
 plt.ylabel('P [Pascal]')
 plt.plot(Zduct, p)
