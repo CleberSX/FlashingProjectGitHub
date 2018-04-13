@@ -54,10 +54,12 @@ class FlowTools_class():
         Objective: necessary to determine the subcooled liquid's viscosity \t
         xR: vector molar concentration ([xR, xO])
         '''
+        G12 = 3.5
         viscO, viscR = self.viscO, self.viscR
         logvisc = np.array([np.log(viscR),np.log(viscO)])
-        xlogvisc = np.einsum('i,i', xR, logvisc)
-        return np.exp(xlogvisc)
+        sum_xlogvisc = np.einsum('i,i', xR, logvisc)
+        xRxO_G12 = np.prod(xR) * G12
+        return np.exp(sum_xlogvisc + xRxO_G12)
     
     def viscosidadeBifasica(self, x, xR, p, T, MMixture, spvolF):
         '''
@@ -81,3 +83,5 @@ class FlowTools_class():
         Gt, D = self.Gt, self.D
         viscTP = self.viscosidadeBifasica(x, xR, p, T, MMixture, spvolF)
         return (Gt * D / viscTP)
+
+    
