@@ -118,7 +118,7 @@ FOR MORE INFORMATION ABOUT Bubble Pressure consult BubbleP.py
 =================================================================================
 '''
 
-LC, base = 99./100, 'mass' # <=============================== change here
+LC, base = 21.7/100, 'mass' # <=============================== change here
 zin = np.array([LC, (1. - LC)])
 xRe, xRe_mass = Tools_Convert.frac_input(MM, zin, base)
 hR = hR_mass * prop_obj.calculate_weight_molar_mixture(MM, xRe, 'saturated_liquid')
@@ -172,6 +172,7 @@ CREATING ANOTHER NECESSARY OBJECT
 
 FlowTools_obj = FlowTools_class(viscG, viscR, viscO, D, Gt)
 viscL = FlowTools_obj.viscosidadeMonofasico(xRe)
+print('viscosidade com 1 porcento de óleo ', viscL * 1e6)
 #print(twoPhaseFlowTools_obj)
 
 
