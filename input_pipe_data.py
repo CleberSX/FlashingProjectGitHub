@@ -46,7 +46,7 @@ def input_pipe_data_function():
 
 def areaVenturiPipe_function(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, z):
     ''' 
-    THIS FUNCTION CALCULATE THE PIPE CROSS SECTION AREA, WHICH DEPENDS ON 
+    THIS FUNCTION CALCULATES THE PIPE CROSS SECTION AREA, WHICH DEPENDS ON 
     AT DUCT POSITION, i.e., Ac = Ac(z)  \n
 
     angleVenturi_in: entrance venturi angle [rad] \n
