@@ -1,18 +1,16 @@
 import numpy as np 
+from CoolProp.CoolProp import PropsSI
 
 R = 8314.34                         # J / (kmol K)
 
 
 class FlowTools_class():
     '''THIS CLASS IS NECESSARY TO CALCULATE FLUID PROPERTIES: SINGLE PHASE & TWO PHASE \t
-    viscG: saturated gas's dynamic viscosity [kg/(m.s)] \t
-    viscO: lubricant oil's dynamic viscosity [kg/(m.s)] \t
-    viscR: refrigerant's dynamic viscosity [kg/(m.s)] \t
     D: diameter [m] \t
     Gt: superficial total mass flux [(kg/s)/m2]
     '''
-    def __init__(self, viscG, viscR, viscO, D, Gt):
-        self.viscG, self.viscR, self.viscO, self.D, self.Gt = viscG, viscR, viscO, D, Gt
+    def __init__(self, D, Gt):
+        self.D, self.Gt = D, Gt
     
     
     def __str__(self):
@@ -31,7 +29,8 @@ class FlowTools_class():
 
     def volumeEspecificaBifasico(self, x, p, T, MMixture, spvolF):
         '''
-        MMixture:  mixture molar weight --> MMixture = np.eisum('i,i', x, MM) [kg/kmol] \t
+        x: vapor quality \t
+        MMixture:  mixture molar weight 
         spvolF: specific volume saturated liquid [m3/kg]
         '''
         spvolG = self.volumeEspecificoGas(p, T, MMixture)
@@ -41,21 +40,55 @@ class FlowTools_class():
     def fracaoVazio(self, x, p, T, MMixture, spvolF):
         '''
         x: vapor quality \t
-        MMixture:  mixture molar weight --> MMixture = np.eisum('i,i', x, MM) [kg/kmol] \t
+        MMixture:  mixture molar weight 
         spvolF: specific volume saturated liquid [m3/kg]
         '''
         spvolG = self.volumeEspecificoGas(p, T, MMixture)
         spvolTP = self.volumeEspecificaBifasico(x, p, T, MMixture, spvolF)
         return (spvolG * x / spvolTP)
 
-    def viscosidadeMonofasico(self, xR):
+    def viscO_function(self, T):
+
         '''
-        Kedzierski & Kaul (1993) correlation - see Guilherme Borges Ribeiro's Thesis (page 51) \t
+        This function calculate the POE ISO VG 10 viscosity \n
+    
+        T: temperature [K] \n
+        Oil Viscosity: in [Pa.s] \n
+
+
+        This correlation has been gotten from: \n 
+        Tese de doutorado do Dalton Bertoldi (2014), page 82 \n
+
+        "Investigação Experimental de Escoamentos Bifásicos com mudança \n
+        de fase de uma mistura binária em tubo de Venturi" \n
+         '''
+        Tcelsius = T - 273.15
+        return 0.04342 * np.exp(- 0.03529 * Tcelsius)
+
+    def viscR_function(self, T, p):
+        '''
+        This function is call the CoolProp
+        T: temperature [K] 
+        p: pressure [Pa]
+        Refrigerant's dynamic viscosity [Pa.s] \t
+        '''
+        return PropsSI("V", "T", T, "P", p,"R134a")
+
+
+    def viscosidadeMonofasico(self, T, p, xR, G12 = 3.5):
+        '''
+        GRUNBERG & NISSAN (1949) correlation - see Dalton Bertoldi's Thesis (page 81) \t
         Objective: necessary to determine the subcooled liquid's viscosity \t
+        T: temperature [K] 
+        p: pressure [Pa]
         xR: vector molar concentration ([xR, xO])
+        G12: model's parameter (G12 = 3.5 has been taken from Dalton's Thesis (page 82))
+        Refrigerant viscosity is get from CoolProp
+        viscO: Oil's dynamic viscosity [Pa.s]
+        viscR: Refrigerant's dynamic viscosity [Pa.s]
         '''
-        G12 = 3.5
-        viscO, viscR = self.viscO, self.viscR
+        viscO = self.viscO_function(T)
+        viscR = self.viscR_function(T, p)
         logvisc = np.array([np.log(viscR),np.log(viscO)])
         sum_xlogvisc = np.einsum('i,i', xR, logvisc)
         xRxO_G12 = np.prod(xR) * G12
@@ -69,8 +102,8 @@ class FlowTools_class():
         MMixture:  mixture molar weight --> MMixture = np.eisum('i,i', x, MM) [kg/kmol] \t
         spvolF: specific volume saturated liquid [m3/kg]
          '''
-        viscG = self.viscG
-        viscF = self.viscosidadeMonofasico(xR)
+        viscG = 12e-6 #valor qqer...temporário...preciso entrar com uma equação aqui
+        viscF = self.viscosidadeMonofasico(T, p, xR)
         alfa = self.fracaoVazio(x, p, T, MMixture, spvolF)
         return (alfa * viscG + viscF * (1. - alfa) * (1. + 2.5 * alfa))  #Eqc 8.33, pag 213 Ghiaasiaan
 
