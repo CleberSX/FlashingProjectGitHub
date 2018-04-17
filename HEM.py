@@ -99,7 +99,7 @@ Sr = 1.
 '''
 (pC, Tc, AcF, MM, omega_a, omega_b, kij, Cp) = props
 (TR, hR_mass, sR_mass) = input_reference_values_function()
-(p_e, T_e, mdotL_e, viscG, viscR, viscO) = input_flow_data_function() # <=============================== change here
+(p_e, T_e, mdotL_e) = input_flow_data_function() # <=============================== change here
 (angleVenturi_in, angleVenturi_out, ks, Ld, D, Dvt, ziv, zig, zfg, zfv) = pipe() # <=============================== change here
 
 
@@ -118,7 +118,7 @@ FOR MORE INFORMATION ABOUT Bubble Pressure consult BubbleP.py
 =================================================================================
 '''
 
-LC, base = 21.7/100, 'mass' # <=============================== change here
+LC, base = 0.05/100, 'mass' # <=============================== change here
 zin = np.array([LC, (1. - LC)])
 xRe, xRe_mass = Tools_Convert.frac_input(MM, zin, base)
 hR = hR_mass * prop_obj.calculate_weight_molar_mixture(MM, xRe, 'saturated_liquid')
@@ -170,9 +170,9 @@ CREATING ANOTHER NECESSARY OBJECT
 =================================================================================================================
 '''
 
-FlowTools_obj = FlowTools_class(viscG, viscR, viscO, D, Gt)
-viscL = FlowTools_obj.viscosidadeMonofasico(xRe)
-print('viscosidade com 1 porcento de óleo ', viscL * 1e6)
+FlowTools_obj = FlowTools_class(D, Gt)
+viscL = FlowTools_obj.viscosidadeMonofasico(T_e, p_e, xRe)
+print('viscosidade líquido subresfriado - entrada duto [1e-6 Pa.s] ', viscL * 1e6)
 #print(twoPhaseFlowTools_obj)
 
 
@@ -182,7 +182,7 @@ print('viscosidade com 1 porcento de óleo ', viscL * 1e6)
 # How to solve this system? See the page -->
 # --> https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.odeint.html
 
-def systemEDOsinglePhase(uph, Zduct, Gt, D, MMixture, viscL, ks, h_e, T_e, Cp, xRe, deltaZ):
+def systemEDOsinglePhase(uph, Zduct, Gt, D, MMixture, ks, h_e, T_e, Cp, xRe, deltaZ):
     '''
     [1] - Objetivo: resolver um sistema de EDO's das derivadas velocidade, presssão e entalpia com o uso da ferramenta linalg.solve; \t
     [2] - Input: \t
@@ -203,6 +203,7 @@ def systemEDOsinglePhase(uph, Zduct, Gt, D, MMixture, viscL, ks, h_e, T_e, Cp, x
     CpL = np.einsum('i,i', xRe, Cp)  
     T = T_e + (h - h_e) / CpL
     Gt2 = np.power(Gt, 2)
+    viscL = FlowTools_obj.viscosidadeMonofasico(T_e, p, xRe)
     Re_mon = Gt * D / viscL   
     
     densL_e = prop_obj.calculate_density_phase(p_e, T_e, MM, xRe, "liquid")
@@ -221,7 +222,7 @@ def systemEDOsinglePhase(uph, Zduct, Gt, D, MMixture, viscL, ks, h_e, T_e, Cp, x
     deltaA = A2nd - A1st
     avrgA = (A2nd + A1st) / 2
     dAdZ = deltaA / deltaZ
-    print('Z = ', Zduct, 'dAdZ', dAdZ, file=fh)
+    #print('Z = ', Zduct, 'dAdZ', dAdZ, file=fh)
 
 
     A11, A12, A13 = np.power(u,-1), 0., (- beta / CpL)     
@@ -268,9 +269,9 @@ uph_0 = [u_e, p_e, h_e]
 
 
 #===================== INTEGRATION ========================
-fh = open("saida_.txt","w")
-uph_singlephase = integrate.odeint(systemEDOsinglePhase, uph_0, Zduct, args=(Gt, D, MMixture, viscL, ks, h_e, T_e, Cp, xRe, deltaZ))
-fh.close()
+#fh = open("saida_.txt","w")
+uph_singlephase = integrate.odeint(systemEDOsinglePhase, uph_0, Zduct, args=(Gt, D, MMixture, ks, h_e, T_e, Cp, xRe, deltaZ))
+#fh.close()
 
 
 # #[8] ================= TAKING THE RESULTS =================
@@ -315,7 +316,7 @@ plt.legend(['$u_{incompressivel}$ ao longo do duto'], loc=1) #loc=2 vai para can
 
 plt.figure(figsize=(7,5))
 plt.xlim(0.675,0.725)
-plt.ylim(12.5e5, 13.5e5)
+plt.ylim(8e5, 10e5)
 plt.xlabel('Z [m]')
 plt.ylabel('P [Pascal]')
 plt.plot(Zduct, p)
