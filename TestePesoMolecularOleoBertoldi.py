@@ -35,7 +35,7 @@ A VISCOSIDADE DO ÓLEO É CALCULADA VIA EQUAÇÃO DA TESE DO BERTOLDI  (page 82)
 #Testes...Discutir com Prof Jader
 
 (pC, Tc, AcF, MM, omega_a, omega_b, kij, Cp) = props
-LC, base = 0./100, 'mass' # <=============================== change here
+LC, base = 0.01/100, 'mass' # <=============================== change here
 zin = np.array([LC, (1. - LC)])
 xRe, xRe_mass = Tools_Convert.frac_input(MM, zin, base)
 
@@ -53,7 +53,6 @@ FlowTools_obj = FlowTools_class(D, Gt)
 
 
 visc_mixture_in = FlowTools_obj.viscosidadeMonofasico(T_e, p_e, xRe)
-
 print('minha viscosidade', visc_mixture_in)
 print('percentual em massa refrigerante', LC)
 print('vetor xRe massico', xRe_mass)

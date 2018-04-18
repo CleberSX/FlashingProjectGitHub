@@ -25,8 +25,8 @@ def input_pipe_data_function():
     print('\n---\n DATA FLOW ', this_function_name)
     print('\n---\n')
 
-    angleVenturi_in = np.deg2rad(40. / 2)                                   
-    angleVenturi_out = np.deg2rad(14. / 2)                                   
+    angleVenturi_in = np.deg2rad(39.96621 / 2.)                                   
+    angleVenturi_out = np.deg2rad(13.99038 / 2.)                                   
     rugosity = 1.2e-3                                       # ks
     lenght = 1100e-3                                         # Ld
     diameter = 16e-3                                        # D
@@ -61,20 +61,20 @@ def areaVenturiPipe_function(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig
     rc: cross section radius, i.e., rc = rc(z) [m] (valid for the intire circuit, including the venturi)
     '''
 
-    pipe_radius = D / 2.
-    if (ziv < z < zig): rc = (Dvt / 2) + (zig - z) * np.tan(angleVenturi_in) 
-    elif (zig <= z <= zfg): rc = Dvt / 2 
-    elif (zfg < z < zfv): rc = (Dvt / 2) + (z-zfg) * np.tan(angleVenturi_out)
-    else: rc = pipe_radius 
-       
+    
+    if (ziv < z < zig): rc = (Dvt / 2.) + (zig - z) * np.tan(angleVenturi_in) 
+    elif (zig <= z <= zfg): rc = Dvt / 2. 
+    elif (zfg < z < zfv): rc = (Dvt / 2.) + (z - zfg) * np.tan(angleVenturi_out)
+    else: rc = D / 2.   
     msg = '\n==========================================================================\n'
     msg += 'If this msg pop up it\'s because the venturi\'s radius = %s was calculate \n'
     msg += ' as been bigger than tube\'s one = %s in the areaVenturiPipe_function(). \n'
     msg += ' So, you must review the input geometric venturi data'
     msg += '\n==========================================================================\n'
-    assert rc <= pipe_radius,  msg  % (str(rc), str(D / 2))
+    assert rc <= D / 2,  msg  % (str(rc), str(D / 2))
     
     return np.pi * rc ** 2 
+
 
         
 

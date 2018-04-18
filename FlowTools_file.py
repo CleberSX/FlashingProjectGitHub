@@ -77,14 +77,14 @@ class FlowTools_class():
 
     def viscosidadeMonofasico(self, T, p, xR, G12 = 3.5):
         '''
-        GRUNBERG & NISSAN (1949) correlation - see Dalton Bertoldi's Thesis (page 81) \t
-        Objective: necessary to determine the subcooled liquid's viscosity \t
-        T: temperature [K] 
-        p: pressure [Pa]
-        xR: vector molar concentration ([xR, xO])
-        G12: model's parameter (G12 = 3.5 has been taken from Dalton's Thesis (page 82))
-        Refrigerant viscosity is get from CoolProp
-        viscO: Oil's dynamic viscosity [Pa.s]
+        GRUNBERG & NISSAN (1949) correlation - see Dalton Bertoldi's Thesis (page 81) \n
+        Objective: necessary to determine the subcooled liquid's viscosity \n
+        T: temperature [K] \n
+        p: pressure [Pa] \n
+        xR: vector molar concentration ([xR, xO]) \n
+        G12: model's parameter (G12 = 3.5 has been taken from Dalton's Thesis (page 82)) \n
+        Refrigerant viscosity is get from CoolProp \n
+        viscO: Oil's dynamic viscosity [Pa.s] \n
         viscR: Refrigerant's dynamic viscosity [Pa.s]
         '''
         viscO = self.viscO_function(T)

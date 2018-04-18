@@ -45,7 +45,7 @@ specific_heat = Tools_Convert.convert_specific_heat_massbase_TO_molarbase(specif
 
 #sort as name, molar_mass, Tc, pC, AcF, Cp
 comp1 = Molecule("R134a", MM[0], 374.21, 40.5928e5, 0.32684, specific_heat[0])            # [SOURCE II]
-comp2 = Molecule("POE-ISO-10", MM[1], (595.8 + 273.15), 6.92e5, 1.0659, specific_heat[1]) # [SOURCE I]
+comp2 = Molecule("POE-ISO-10", MM[1], (595.8 + 273.15), 6.92e5, 1.0659, specific_heat[1]) # [SOURCE I] ¿specific_heat POE ISO VG 10 não tem no artigo? 
 kij = -0.002851                                                                           # [SOURCE I]
 
 

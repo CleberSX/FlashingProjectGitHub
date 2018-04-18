@@ -17,13 +17,20 @@ def input_flow_data_function():
     room_pressure = 1.e5                        # -- pressao ambiente [Pa]
     temperature = (36.5 + 273.15)                         # -- temperatura de entrada [K]
     pressure = 8.92 * room_pressure              # -- pressão entrada duto [Pa]
-    # viscG = 12.02e-6                            # -- (@ saturated gas) [Pa.s]
-    # viscR = PropsSI("V", "T", temperature, "P", room_pressure,"R134a")    # -- (liquid refrigerant's dynamic viscosity ) [Pa.s]
-    # viscO =  viscO_function(temperature, 'K')   # -- (@ oil's dynamic viscosity ) [Pa.s]
-    subcooled_liquid_mass_flow = 0.01           # -- (mass ratio subcooled liquid) [kg/s]
+    subcooled_liquid_mass_flow = 0.0076592           # -- (mass ratio subcooled liquid) [kg/s]
 
     return (pressure, temperature, subcooled_liquid_mass_flow)
 
+
+'''
+Rodada com POE ISO puro (Tese Dalton, Tab 4.1, pg 80)
+
+d_garganta =	0.004	m
+A_garganta =	1.25664E-05	m2 (calculei)
+G_POE_garganta =	609.5	kg/(m2 s) 
+mdot	0.007659203	kg/s (calculei)
+
+'''
 
 
 

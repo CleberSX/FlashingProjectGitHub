@@ -78,6 +78,7 @@ M: mixture molar mass [kg/kgmol] ==> depend on phase composition
 
 
 class HSFv:
+      '''This class is applied to calculate the entalpy and entropy. For more detail, print(object's name)'''
       def __init__(self, pC, TR, Tc, AcF, Cp, MM, hR, sR):
             self.pC, self.TR, self.Tc = pC, TR, Tc
             self.AcF, self.Cp, self.MM, self.hR, self.sR = AcF, Cp, MM, hR, sR
