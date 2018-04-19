@@ -71,20 +71,20 @@ R = 8314.34                         # J / (kmol K)
 # sR: reference entropy (in molar base) [J/kmol K]
 # CpL: subcooled liquid's specific heat [J/(kg K)] -- CpL = np.eisum('i,i', xRe, Cp)
 # Cp: vector components' specific heat, which Cp1= Cp[0] and Cp2 = Cp[1]
-# D: diametro em metros [m]
-# Ld: comprimento total do duto [m]
+# D: diameter for duct just (it isn't represent Venturi); it is a constant -- see Dvt  [m]
+# Ld: total lenght [m]
 # pointsNumber: quantidade divisoes do duto, ou seja, quantidade de Z steps [-]
 # ks: absolut rugosity [m]
 # rug = ks/D: rugosidade relativa [-]
 # angleVenturi_in: entrance venturi angle [rad]
 # angleVenturi_out: outlet venturi angle [rad]  
-# Dvt: venturi throat diameter [m] 
+# Dvt: venturi throat diameter where Dvt change according position, i.e, Dvt = Dvt(z) [m] 
 # ziv: coordinate where venturi begins [m] 
 # zig: coordinate where venturi throat begins [m] 
 # zfg: coordinate where venturi throat ends [m] 
 # zfv: coordinate where venturi ends [m] 
-# Ac: cross area section [m2] -- valid for any duct position, including z position inside venturi, i.e., Ac = Ac(z) 
-# Ac_pipe: pipe cross area section [m2] -- valid just for pipe area; so, can be calculated at pipe entrance, z = 0
+# Ac: cross section area; applied for entire circuit flow, i.e, Ac = Ac(z) [m2]
+# rc: cross section radius [m]; applied for entire circuit flow, i.e, rc = rc(z) [m]
 '''
 =================================================================================
                                 INPUT DATA
@@ -209,8 +209,10 @@ BUILDING INITIAL VALUES
 =================================================================================================================
 '''
 def initialValues_function():
-    '''necessary in the Odeint numerical method'''
-    Ac_e = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, 0.0)
+    '''necessary in the Odeint numerical method
+    Return: u_e, p_e, h_e
+    '''
+    Ac_e, rc_e = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, 0.0)
     Gt_e = mdotL_e / Ac_e
     densL_e = prop_obj.calculate_density_phase(p_e, T_e, MM, xRe, "liquid") 
     spvolL_e = np.power(densL_e,-1) 
@@ -258,8 +260,8 @@ def systemEDOsinglePhase(uph, Zduct, deltaZ, pack_list, geometric_list):
     #simple calculation
     CpL = np.einsum('i,i', xRe, Cp)  
     T = T_e + (h - h_e) / CpL
-    Ac = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, Zduct)
-    Dc = np.sqrt(4 * Ac / np.pi)
+    Ac, rc = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, Zduct)
+    Dc = 2. * rc
     Gt = mdotL_e / Ac
     Gt2 = np.power(Gt, 2)
     #transport property
@@ -286,9 +288,12 @@ def systemEDOsinglePhase(uph, Zduct, deltaZ, pack_list, geometric_list):
     beta = beta_function()
 
     def dAdZ_function():
-        '''derivative approx. to evaluate dAdZ'''
-        A1st = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, Zduct)
-        A2nd = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, Zduct + deltaZ)
+        '''derivative approx. to evaluate dAdZ [m2/m] and area average [m2]
+
+        Return: dAdZ, avrgA
+        '''
+        A1st, rc1st = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, Zduct)
+        A2nd, rc2nd = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, Zduct + deltaZ)
         deltaA = A2nd - A1st
         avrgA = (A2nd + A1st) / 2.
         return (deltaA / deltaZ), avrgA
@@ -349,10 +354,21 @@ h = uph_singlephase[:,2]
 pB_v = pB * np.ones_like(Zduct)
 #alfa = FlowTools_obj.fracaoVazio(0.01, p,T_e,MMixture, spvolL_e)
 
+def taking_p150mm():
+    '''
+    This function select the pressure at position Zduct = 150mm \n
+    Why? to compare simulated results with Dalton's experimental data
+
+    Return: p150mm, point_Zduct150mm
+     '''
+    point_Zduct150mm = int(0.150/deltaZ)
+    p150mm = p[point_Zduct150mm - 1]
+    return p150mm, point_Zduct150mm
+
+p150mm, point_Zduct150mm = taking_p150mm()
 
 CpL = np.einsum('i,i', xRe, Cp)  # -- capacidade térmica líquido subresfriado [J/(kg K)] (@ solução ideal)
 T = T_e + (h - h_e) / CpL
-
 
 
 
@@ -383,14 +399,17 @@ T = T_e + (h - h_e) / CpL
 
 
 plt.figure(figsize=(7,5))
-# plt.xlim(0.675,0.8)
+plt.title('Grafico comparativo com pg 81 Tese Dalton')
+plt.grid(True)
+plt.xlabel('Z* [m]')
+plt.ylabel('p - p#1 [Pascal]')
+plt.plot((Zduct[(point_Zduct150mm-1):] - 0.150), (p[(point_Zduct150mm - 1):] - p150mm))
+plt.xlim(0.0, 0.9)
 # plt.ylim(8e5, 10e5)
-plt.xlabel('Z [m]')
-plt.ylabel('P [Pascal]')
-plt.plot(Zduct, p)
 # plt.legend(['Pressao Esc. Incompressivel'], loc=3)
-plt.plot(Zduct, pB_v)
-plt.legend(['Pressao Esc. Incompressivel', 'Pressão Saturação'], loc=3)
+# plt.plot(Zduct, pB_v)
+# plt.legend(['Pressao Esc. Incompressivel', 'Pressão Saturação'], loc=3)
+plt.legend('Pressão Esc. Incompressível', loc=1)
 
 # plt.figure(figsize=(7,5))
 # #plt.ylim(20,120)
