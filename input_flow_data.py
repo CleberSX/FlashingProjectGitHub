@@ -16,8 +16,8 @@ def input_flow_data_function():
 
     room_pressure = 1.e5                        # -- pressao ambiente [Pa]
     temperature = (36.5 + 273.15)                         # -- temperatura de entrada [K]
-    pressure = 8.92 * room_pressure              # -- pressão entrada duto [Pa]
-    subcooled_liquid_mass_flow = 0.0076592           # -- (mass ratio subcooled liquid) [kg/s]
+    pressure = 8.92 * room_pressure #8.92             # -- pressão entrada duto [Pa]
+    subcooled_liquid_mass_flow = 0.04 #0.0076592           # -- (mass ratio subcooled liquid) [kg/s]
 
     return (pressure, temperature, subcooled_liquid_mass_flow)
 
