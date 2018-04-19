@@ -7,10 +7,11 @@ R = 8314.34                         # J / (kmol K)
 class FlowTools_class():
     '''THIS CLASS IS NECESSARY TO CALCULATE FLUID PROPERTIES: SINGLE PHASE & TWO PHASE \t
     D: diameter [m] \t
+    mdotL: subcooled mass rate [kg/s]
     Gt: superficial total mass flux [(kg/s)/m2]
     '''
-    def __init__(self, D, Gt):
-        self.D, self.Gt = D, Gt
+    def __init__(self, D, mdotL):
+        self.D, self.mdotL = D, mdotL
     
     
     def __str__(self):
@@ -72,6 +73,7 @@ class FlowTools_class():
         p: pressure [Pa]
         Refrigerant's dynamic viscosity [Pa.s] \t
         '''
+        
         return PropsSI("V", "T", T, "P", p,"R134a")
 
 
@@ -113,7 +115,9 @@ class FlowTools_class():
         x: vapor quality [-] \t
         xR: vector molar concentration ([xR, xO])
          '''
-        Gt, D = self.Gt, self.D
+        mdotL, D = self.mdotL, self.D
+        Ac = np.pi * np.power(D, 2) / 4.
+        Gt = mdotL / Ac
         viscTP = self.viscosidadeBifasica(x, xR, p, T, MMixture, spvolF)
         return (Gt * D / viscTP)
 
