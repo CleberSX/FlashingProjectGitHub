@@ -6,6 +6,8 @@ from InputData___ReadThisFile import props
 
 def input_flow_data_function():
     '''
+    Return: p_e, T_e, mdotL_e
+
     p_e: pipe's entrance pressure [Pa] \n
     T_e: pipe's entrance temperature  [K] \n 
     mdotL_e: pipe's entrance liquid mass mass ratio [kg/s] 
@@ -17,8 +19,8 @@ def input_flow_data_function():
     room_pressure = 1.e5                        # -- pressao ambiente [Pa]
     temperature = (36.5 + 273.15)                         # -- temperatura de entrada [K]
     pressure = 8.92 * room_pressure #8.92             # -- pressão entrada duto [Pa]
-    subcooled_liquid_mass_flow = 0.04 #0.0076592           # -- (mass ratio subcooled liquid) [kg/s]
-
+    subcooled_liquid_mass_flow = 0.122547289 #0.0076592           # -- (mass ratio subcooled liquid) [kg/s]
+    #se considerar G = 609.5 kg/(m2.s) p/ D = 16mm -- mdotL = 0.122547289
     return (pressure, temperature, subcooled_liquid_mass_flow)
 
 
