@@ -49,6 +49,8 @@ def areaVenturiPipe_function(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig
     THIS FUNCTION CALCULATES THE PIPE CROSS SECTION AREA, WHICH DEPENDS ON 
     AT DUCT POSITION, i.e., Ac = Ac(z)  \n
 
+    Return: Ac, rc
+
     angleVenturi_in: entrance venturi angle [rad] \n
     angleVenturi_out: outlet venturi angle [rad] \n
     D: pipe diameter [m] \n
@@ -58,7 +60,8 @@ def areaVenturiPipe_function(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig
     zfg: coordinate where venturi throat ends [m] \n
     zfv: coordinate where venturi ends [m] 
     z: pipe position [m] \n 
-    rc: cross section radius, i.e., rc = rc(z) [m] (valid for the intire circuit, including the venturi)
+    rc: cross section radius, i.e., rc = rc(z) [m] \n
+    Ac: area cross section where Ac = Ac(z) [m2]
     '''
 
     
@@ -72,8 +75,10 @@ def areaVenturiPipe_function(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig
     msg += ' So, you must review the input geometric venturi data'
     msg += '\n==========================================================================\n'
     assert rc <= D / 2,  msg  % (str(rc), str(D / 2))
+
+    Ac = np.pi * rc ** 2 
     
-    return np.pi * rc ** 2 
+    return Ac, rc
 
 
         
