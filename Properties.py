@@ -33,18 +33,20 @@ class Properties(PengRobinsonEos):
         '''
         This method calculate the phase density (can be vapor ou liquid density)
 
-        :p: pressure [Pa]
-        :T: temperature [K]
-        :x: molar fraction [-]
-        :MM: molar weight each component [kg/kmol]
-        :M: molar weight of the mixture/phase [kg/kmol]
-        :rho: specific mass of mixture/phase [kg/m3]
-        :param fluid_type: put 'vapor' or 'liquid'; it is just to be more clear
-        :Z: compressibility factor
+        Input: \n
+        :p: pressure [Pa] \n
+        :T: temperature [K] \n
+        :MM: molar weight each component [kg/kmol] \n
+        :x: molar fraction [-] \n
+        :rho: specific mass of mixture/phase [kg/m3] \n
+        :param fluid_type: put 'vapor' or 'liquid'; it is just to be more clear \n
+        :Z: compressibility factor \n
+
+        Return: rho
         '''
-        f, Z = self.calculate_fugacities_with_minimum_gibbs_energy(p, T, x, fluid_type)
+        _f, Z = self.calculate_fugacities_with_minimum_gibbs_energy(p, T, x, fluid_type)
         M = self.calculate_weight_molar_mixture(MM, x, fluid_type)
-        rho = p*M/(Z*R*T)
+        rho = p * M /(Z * R * T)
         return rho
 
 
@@ -73,7 +75,7 @@ class Properties(PengRobinsonEos):
         α, κ_ij, Pc, Tc = self.α_function(T), self.κ_ij, self.Pc, self.Tc
         ω, m, Ω_a, Ω_b = self.ω, self.m, self.Ω_a, self.Ω_b
         acj = Ω_a * (R * Tc)**2 / Pc # [5.10]
-
+        
         #[TdadT] - Building "TdadT" parameter given by equation [5.82]
         ai = np.einsum('i,i->i', acj, α) #[5.11]
         Trj = T / Tc
@@ -112,7 +114,7 @@ class Properties(PengRobinsonEos):
         :p: pressure [Pa]
         '''
         self.update_parameters(p, T, x)
-        f, Z = self.calculate_fugacities_with_minimum_gibbs_energy(p, T, x, fluid_type)
+        _f, Z = self.calculate_fugacities_with_minimum_gibbs_energy(p, T, x, fluid_type)
         # print('Considering T = %.2f and P = %.2e ==> valor of Z = %.5f to %s phase' % (T, p, Z, fluid_type))
         h_i = (Z - 1.0)
         h_ii = self.A / (2 * SQRT_2 * self.B)
@@ -136,7 +138,7 @@ class Properties(PengRobinsonEos):
         '''
         p0 = 101325.
         self.update_parameters(p, T, x)
-        f, Z = self.calculate_fugacities_with_minimum_gibbs_energy(p, T, x, fluid_type)
+        _f, Z = self.calculate_fugacities_with_minimum_gibbs_energy(p, T, x, fluid_type)
         s_i = np.log(Z - self.B)
         s_ii = self.A / (2 * SQRT_2 * self.B) * (1. - self.TdadT / self.a )
         s_iii = (Z + (SQRT_2 + 1.0) * self.B ) / (Z - (SQRT_2 - 1.0) * self.B )
@@ -237,7 +239,7 @@ class Properties(PengRobinsonEos):
         '''
         Dep_h = self.calculate_departure_enthalpy(p, T, x, fluid_type)
         Dep_hR = self.calculate_departure_enthalpy(pR, TR, z, 'saturated liquid')
-        h_cpterm, errorH = self.calculate_enthalpy_ig_int(TR, T, z, Cp)
+        h_cpterm, _errorH = self.calculate_enthalpy_ig_int(TR, T, z, Cp)
         # print('Residual enthalpy @ (pR, TR) = %.2e' % Dep_hR )
         # print('Residual enthalpy @ (p,T) = %.2e' % Dep_h)
         # print('Termo GI in enthalpy = %.2e' % h_cpterm)
@@ -286,7 +288,7 @@ class Properties(PengRobinsonEos):
         '''
         Dep_s = self.calculate_departure_entropy(p, T, x, fluid_type)
         Dep_sR = self.calculate_departure_entropy(pR, TR, z, 'saturated liquid')
-        s_cpterm, errorS = self.calculate_entropy_ig_int(TR, T, z, Cp)
+        s_cpterm, _errorS = self.calculate_entropy_ig_int(TR, T, z, Cp)
         # print('Residual entropy @ (pR, TR) = %.2e' % Dep_sR )
         # print('Residual entropy @ (p,T) = %.2e' % Dep_s)
         # print('Termo GI in entropy = %.2e' % s_cpterm)
