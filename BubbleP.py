@@ -90,6 +90,11 @@ CODE FOR SEEK THE BUBBLE PRESSURE
 '''
 
 class Bubble_class:
+    '''
+    This class determine bubble pressure of a binary mixture
+
+    Return: p, y, Sy, counter
+    '''
     def __init__(self, pC, Tc, AcF, kij):
         self.pC, self.Tc, self.AcF, self.kij = pC, Tc, AcF, kij
 
