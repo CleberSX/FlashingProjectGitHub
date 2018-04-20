@@ -139,9 +139,10 @@ def saturationPressure_ResidualProperties_MolarMixture():
     '''
     hR = hR_mass * prop_obj.calculate_weight_molar_mixture(MM, xRe, 'saturated_liquid')
     sR = sR_mass * prop_obj.calculate_weight_molar_mixture(MM, xRe, 'saturated_liquid')
-    pG = 1.2 * bubble_obj.pressure_guess(T_e, xRe)
-    pB, y, Sy, counter = bubble_obj(T_e, xRe)
-    y_mass = Tools_Convert.convert_molarfrac_TO_massfrac(MM, y)
+    # pG = 1.2 * bubble_obj.pressure_guess(T_e, xRe)
+    pB, _y, _Sy, _counter = bubble_obj(T_e, xRe)
+    #pB = bubble_obj(T_e, xRe)[0]
+    # y_mass = Tools_Convert.convert_molarfrac_TO_massfrac(MM, y)
     MMixture = prop_obj.calculate_weight_molar_mixture(MM, xRe,"liquid")
     return (hR, sR, pB, MMixture)
 
@@ -187,11 +188,13 @@ FRICTION FACTOR - CHURCHILL (1977)
 '''
 def fanningFactor(Re_mon, ks, diametro):
     '''
-    Churchill equation to estimate friction factor (pg 149, Ron Darby's book) \n
+    Churchill equation to estimate Fanning friction factor, f_F, (pg 149, Ron Darby's book) \n
     Can be applied for all flow regimes in single phase \n
     Re_mon: Single phase Reynolds number [-] \n
     ks: rugosity [m] \n
-    diametro: diameter [m]
+    diametro: diameter [m] \n
+
+    Return: f_F
      '''
     f1 = 7. / Re_mon
     f2 = 0.27 * ks/diametro
@@ -212,12 +215,11 @@ def initialValues_function():
     '''necessary in the Odeint numerical method
     Return: u_e, p_e, h_e
     '''
-    Ac_e, rc_e = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, 0.0)
-    Gt_e = mdotL_e / Ac_e
+    Ac_e, _rc_e = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, 0.0)
     densL_e = prop_obj.calculate_density_phase(p_e, T_e, MM, xRe, "liquid") 
     spvolL_e = np.power(densL_e,-1) 
     u_e = (mdotL_e * spvolL_e) / Ac_e                  # Para obter u_e (subcooled liquid)
-    F_V, h_e, s_e = hsFv_obj(p_e, T_e, xRe)            #Para obter h_e (subcooled liquid, so F_V = 0)
+    _F_V, h_e, _s_e = hsFv_obj(p_e, T_e, xRe)            #Para obter h_e (subcooled liquid, so F_V = 0)
     return (u_e, p_e, h_e)
 
 (u_e, p_e, h_e) = initialValues_function()
@@ -231,15 +233,15 @@ uph_0 = [u_e, p_e, h_e]
 # --> https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.odeint.html
 
 geometric_list = (angleVenturi_in, angleVenturi_out, ks, D, Dvt, ziv, zig, zfg, zfv)
-pack_list = (mdotL_e, MMixture, h_e, T_e, Cp, xRe)
+pack_list = (mdotL_e, MM, h_e, T_e, Cp, xRe)
 def systemEDOsinglePhase(uph, Zduct, deltaZ, pack_list, geometric_list):
     '''
     [1] - Objetivo: resolver um sistema de EDO's em z para u, p e h com linalg.solve; \t
     [2] - Input: \t
-        [2.a] vetor comprimento duto (Zduct) \t
-        [2.b] fluxo mássico total baseado na área entrada (Gt) \t
-        [2.c] diâmetro (D) \t
-        [2.d] peso molecular da mixtura (MMixture) \t
+        [2.a] vetor comprimento circuito (Zduct) \t
+        [2.b] vazão mássica líquido subresfriado entrada (mdotL_e) \t
+        [2.c] diâmetro tubo (D) \t
+        [2.d] peso molecular de cada componente (MM) \t
         [2.e] viscosidade da líquido (viscL) \t
         [2.f] rugosidade absoluta (ks) \t
         [2.g] entalpia entrada duto (h_e) \t
@@ -254,7 +256,7 @@ def systemEDOsinglePhase(uph, Zduct, deltaZ, pack_list, geometric_list):
     
     #unpack
     u, p, h = uph
-    (mdotL_e, MMixture, h_e, T_e, Cp, xRe) = pack_list
+    (mdotL_e, MM, h_e, T_e, Cp, xRe) = pack_list
     (angleVenturi_in, angleVenturi_out, ks, D, Dvt, ziv, zig, zfg, zfv) = geometric_list
     
     #simple calculation
@@ -269,17 +271,22 @@ def systemEDOsinglePhase(uph, Zduct, deltaZ, pack_list, geometric_list):
     
     
     def therm_function():
-        '''this function calls external thermal (objects) tools '''
+        '''this function calls external thermal (objects) tools \n
+        
+        Return: spvolL_e, spvolL'''
         densL_e = prop_obj.calculate_density_phase(p_e, T_e, MM, xRe, "liquid")
         spvolL_e = np.power(densL_e, -1) 
         densL = prop_obj.calculate_density_phase(p, T, MM, xRe, "liquid")
         spvolL = np.power(densL, -1) 
-        return densL_e, spvolL_e, densL, spvolL
+        return spvolL_e, spvolL
 
-    densL_e, spvolL_e, densL, spvolL = therm_function()
+    spvolL_e, spvolL = therm_function()
 
     def beta_function():
-        '''this function calculates thermal expansion coefficient - beta '''
+        '''this function calculates thermal expansion coefficient - beta \n
+        
+        Return: beta value
+        '''
         if (T - T_e) != 0.0: spvolLdT = (spvolL - spvolL_e) / (T - T_e) 
         else: spvolLdT = 0.0 
         avrg_spvolL = (spvolL + spvolL_e) / 2.
@@ -288,12 +295,12 @@ def systemEDOsinglePhase(uph, Zduct, deltaZ, pack_list, geometric_list):
     beta = beta_function()
 
     def dAdZ_function():
-        '''derivative approx. to evaluate dAdZ [m2/m] and area average [m2]
+        '''derivative approx. to evaluate dAdZ [m2/m] and area average [m2] \n
 
         Return: dAdZ, avrgA
         '''
-        A1st, rc1st = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, Zduct)
-        A2nd, rc2nd = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, Zduct + deltaZ)
+        A1st, _rc1st = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, Zduct)
+        A2nd, _rc2nd = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, Zduct + deltaZ)
         deltaA = A2nd - A1st
         avrgA = (A2nd + A1st) / 2.
         return (deltaA / deltaZ), avrgA
@@ -302,7 +309,10 @@ def systemEDOsinglePhase(uph, Zduct, deltaZ, pack_list, geometric_list):
     
 
     def frictionFactor_function():  
-        '''this function determines the Fanning friction factor ''' 
+        '''this function determines the Fanning friction factor \n
+        
+        Return: f_F
+        ''' 
         Re_mon = Gt * Dc / viscL   
         colebrook = lambda f0 : 1.14 - 2. * np.log10(ks / Dc + 9.35 / (Re_mon * np.sqrt(f0))) -1 / np.sqrt(f0) 
         f_D = optimize.newton(colebrook, 0.02)  #Darcy 
@@ -352,12 +362,12 @@ u = uph_singlephase[:,0]
 p = uph_singlephase[:,1]
 h = uph_singlephase[:,2]
 pB_v = pB * np.ones_like(Zduct)
-#alfa = FlowTools_obj.fracaoVazio(0.01, p,T_e,MMixture, spvolL_e)
+
 
 def taking_p150mm():
     '''
     This function select the pressure at position Zduct = 150mm \n
-    Why? to compare simulated results with Dalton's experimental data
+    Why? to compare simulated results with Dalton's experimental data \n
 
     Return: p150mm, point_Zduct150mm
      '''
@@ -379,7 +389,7 @@ T = T_e + (h - h_e) / CpL
 
 
 
-# #[9]=========================== PLOT =====================
+# #[9]=========================== PLOTTING =====================
 
 
 # plt.figure(figsize=(7,5))
@@ -399,7 +409,7 @@ T = T_e + (h - h_e) / CpL
 
 
 plt.figure(figsize=(7,5))
-plt.title('Grafico comparativo com pg 81 Tese Dalton')
+plt.title('Grafico comparativo com pg 81 Tese Dalton Gt baseado 16mm')
 plt.grid(True)
 plt.xlabel('Z* [m]')
 plt.ylabel('p - p#1 [Pascal]')
