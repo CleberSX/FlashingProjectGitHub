@@ -78,7 +78,12 @@ M: mixture molar mass [kg/kgmol] ==> depend on phase composition
 
 
 class HSFv:
-      '''This class is applied to calculate the entalpy and entropy. For more detail, print(object's name)'''
+      '''This class is applied to calculate the enthalpy and entropy. For more detail, print(object's name)
+      
+      The main method (__call__) returns the following:
+
+      Return: F_V, h, s (vapor quality, enthalpy mass base, entropy mass base)
+      '''
       def __init__(self, pC, TR, Tc, AcF, Cp, MM, hR, sR):
             self.pC, self.TR, self.Tc = pC, TR, Tc
             self.AcF, self.Cp, self.MM, self.hR, self.sR = AcF, Cp, MM, hR, sR
@@ -89,7 +94,7 @@ class HSFv:
             msg += 'The evaluation is performed either subcooled or equilibrium liquid-vapor (ELV) \n'
             msg += 'The mixture bubble pressure is always evaluated by the object bubble_obj() at interested \n' 
             msg += 'temperature, T. So, the class evaluates if the system is into subcooled or ELV region. The results are \n'
-            msg += 'printed in molar and mass bases.\n' 
+            msg += 'printed in molar and mass bases (be careful when choose the base).\n' 
             msg += 'The input data and sequence of commands are placed together inside the main() function \n'
             msg += '(---------------------------------------------------------)\n'
             return msg
@@ -97,7 +102,7 @@ class HSFv:
       def __call__(self, p, T, z):
             pC, TR, Tc = self.pC, self.TR, self.Tc
             AcF, Cp, MM, hR, sR = self.AcF, self.Cp, self.MM, self.hR, self.sR 
-            pB, y_sat, Sy, counter = bubble_obj(T, z)
+            pB, _y_sat, _Sy, _counter = bubble_obj(T, z)
             pR = pB                       #<----setting the reference pressure equal bubble pressure
             if __name__== '__main__':
                   print(self)
@@ -119,7 +124,7 @@ class HSFv:
                         print('\nSubcooled liquid entalpy h = %.3e [J/ kg]' % h)
                         print('\nSubcooled liquid entropy s = %.3e [J/(kg K)]' % s)
             else:
-                  F_V, is_stable, K_values_newton, initial_K_values = \
+                  F_V, _is_stable, K_values_newton, _initial_K_values = \
                   FlashAlgorithm_main.getting_the_results_from_FlashAlgorithm_main(p, T, pC, Tc, AcF, z)
                   x = z / (F_V * (K_values_newton - 1.) + 1.)
                   y = K_values_newton * x
@@ -187,7 +192,7 @@ def main():
       LC, base = 99./100, 'mass' # <=============================== change here if necessary
       #[2] - CHANGING BASE 
       zin = np.array([LC, (1. - LC)])
-      z, z_mass = Tools_Convert.frac_input(MM, zin, base)
+      z, _z_mass = Tools_Convert.frac_input(MM, zin, base)
       #[3] - STANDARD VALUES
       hR = hR_mass * prop_obj.calculate_weight_molar_mixture(MM, z, 'saturated_liquid')
       sR = sR_mass * prop_obj.calculate_weight_molar_mixture(MM, z, 'saturated_liquid')
