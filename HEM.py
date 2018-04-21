@@ -181,30 +181,6 @@ print('viscosidade líquido subresfriado - entrada duto [1e-6 Pa.s] ', viscL_e *
 
 
 
-'''
-=================================================================================================================
-FRICTION FACTOR - CHURCHILL (1977)
-=================================================================================================================
-'''
-def fanningFactor(Re_mon, ks, diametro):
-    '''
-    Churchill equation to estimate Fanning friction factor, f_F, (pg 149, Ron Darby's book) \n
-    Can be applied for all flow regimes in single phase \n
-    Re_mon: Single phase Reynolds number [-] \n
-    ks: rugosity [m] \n
-    diametro: diameter [m] \n
-
-    Return: f_F
-     '''
-    f1 = 7. / Re_mon
-    f2 = 0.27 * ks/diametro
-    a = 2.457 * np.log(1. / (f1**0.9 + f2))
-    A = a ** 16
-    b = 37530. / Re_mon
-    B = b ** 16
-    f3 = 8. / Re_mon
-    return  2 * (f3 ** 12 + 1./(A + B) ** 1.5 ) ** (1. / 12)
-
 
 '''
 =================================================================================================================
@@ -308,8 +284,8 @@ def systemEDOsinglePhase(uph, Zduct, deltaZ, pack_list, geometric_list):
     dAdZ, avrgA = dAdZ_function()
     
 
-    def frictionFactor_function():  
-        '''this function determines the Fanning friction factor \n
+    def frictionFactor_Colebrook():  
+        '''this Colebrook function determines the Fanning friction factor \n
         
         Return: f_F
         ''' 
@@ -320,8 +296,28 @@ def systemEDOsinglePhase(uph, Zduct, deltaZ, pack_list, geometric_list):
         else: f_F = 16. / Re_mon
         return f_F
 
-    f_F = frictionFactor_function()
+    # def fanningFactor_Churchill1977():
+    #     '''
+    #     Churchill equation to estimate Fanning friction factor, f_F, (pg 149, Ron Darby's book) \n
+    #     Can be applied for all flow regimes in single phase \n
+    #     Re_mon: Single phase Reynolds number [-] \n
+    #     ks: rugosity [m] \n
+    #     Dc: diameter [m] \n
 
+    #     Return: f_F
+    #     '''
+    #     Re_mon = Gt * Dc / viscL 
+    #     f1 = 7. / Re_mon
+    #     f2 = 0.27 * ks/Dc
+    #     a = 2.457 * np.log(1. / (f1 ** 0.9 + f2))
+    #     A = a ** 16
+    #     b = 37530. / Re_mon
+    #     B = b ** 16
+    #     f3 = 8. / Re_mon
+    #     return  2 * (f3 ** 12 + 1./(A + B) ** 1.5 ) ** (1. / 12)
+    
+    f_F = frictionFactor_Colebrook()
+    # f_F = fanningFactor_Churchill1977()
 
     A11, A12, A13 = np.power(u,-1), 0., (- beta / CpL)     
     A21, A22, A23 = u, spvolL, 0.
