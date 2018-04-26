@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import logging
+import logging, sys
 import numpy as np 
 from scipy import integrate, optimize
 from scipy.misc import derivative
@@ -158,9 +158,17 @@ CREATING MORE NECESSARY OBJECTS
 eos_obj = PengRobinsonEos(pC, Tc, AcF, omega_a, omega_b, kij)
 hsFv_obj = HSFv(pC, TR, Tc, AcF, Cp, MM, hR, sR) #to obtain enthalpy
 
-FlowTools_obj = FlowTools_class(D, mdotL_e)
-viscL_e = FlowTools_obj.viscosidadeMonofasico(T_e, p_e, xRe)
-print('viscosidade líquido subresfriado - entrada duto [1e-6 Pa.s] ', viscL_e * 1e6)
+FlowTools_obj = FlowTools_class(mdotL_e)
+# viscL_e = FlowTools_obj.viscosidadeMonofasico(T_e, p_e, xRe)
+# viscL_jpDias = FlowTools_obj.jpDias_liquidViscosity(T_e, p_e, xRe_mass)
+
+# densL_jpDias = FlowTools_obj.jpDias_liquidPhaseDensity(T_e, p_e, xRe_mass)
+# densL_e_ELV = prop_obj.calculate_density_phase(p_e, T_e, MM, xRe, "liquid")
+
+# print('viscosidade líquido subresfriado - entrada duto Dalton [1e-6 Pa.s] ', viscL_e * 1e6)
+# print('viscosidade líquido subresfriado - entrada duto jpDias [1e-6 Pa.s] ', viscL_jpDias * 1e6)
+# print('densidade líquido subresfriado - entrada duto jpDias [kg m-3] ', densL_jpDias)
+# print('densidade líquido subresfriado - entrada duto ELV [kg m-3] ', densL_e_ELV)
 #print(twoPhaseFlowTools_obj)
 
 
@@ -209,54 +217,63 @@ uph_0 = [u_e, p_e, h_e]
 # --> https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.odeint.html
 
 geometric_list = (angleVenturi_in, angleVenturi_out, ks, D, Dvt, ziv, zig, zfg, zfv)
-pack_list = (mdotL_e, MM, h_e, T_e, Cp, xRe)
-def systemEDOsinglePhase(uph, Zduct, deltaZ, pack_list, geometric_list):
+flow_list = (mdotL_e, MM, h_e, T_e, Cp, xRe, xRe_mass)
+def systemEDOsinglePhase(uph, Zduct, deltaZ, flow_list, geometric_list):
     '''
-    [1] - Objetivo: resolver um sistema de EDO's em z para u, p e h com linalg.solve; \t
-    [2] - Input: \t
-        [2.a] vetor comprimento circuito (Zduct) \t
-        [2.b] vazão mássica líquido subresfriado entrada (mdotL_e) \t
-        [2.c] diâmetro tubo (D) \t
-        [2.d] peso molecular de cada componente (MM) \t
-        [2.e] viscosidade da líquido (viscL) \t
-        [2.f] rugosidade absoluta (ks) \t
-        [2.g] entalpia entrada duto (h_e) \t
-        [2.h] temperatura entrada duto (T_e) \t
-        [2.i] vetor calor específico (Cp = ([CpR, CpO])) \t
-        [2.j] vetor concentração molar entrada duto (  xRe = ([xR, xO])  ) \t
-        [2.l] incremento/passo no comprimento Z do duto (deltaZ); saída adicional do np.linspace \t
-        [2.m] uma lista com parâmetros do escoamento (pack_list) \t
-        [2.n] uma lista com os parametros geométricos do circuito escoamento (geometric_list)
-    [3] - Return: [du/dz, dp/dz, dh/dz]
+    Objetivo: resolver um sistema de EDO's em z para u, p e h com linalg.solve; \t
+        [1] - Input: \t
+            [1.a] vetor comprimento circuito (Zduct) \t
+            [1.b] vazão mássica líquido subresfriado entrada (mdotL_e) \t
+            [1.c] diâmetro tubo (D) \t
+            [1.d] peso molecular de cada componente (MM) \t
+            [1.e] viscosidade da líquido (viscL) \t
+            [1.f] rugosidade absoluta (ks) \t
+            [1.g] entalpia entrada duto (h_e) \t
+            [1.h] temperatura entrada duto (T_e) \t
+            [1.i] vetor calor específico (Cp = ([CpR, CpO])) \t
+            [1.j] vetor concentração molar entrada duto (  xRe = ([xR, xO])  ) \t
+            [1.l] vetor concentração massica entrada duto (  xRe_mass = Tools.convert...  ) \t
+            [1.m] incremento/passo no comprimento Z do duto (deltaZ); saída adicional do np.linspace \t
+            [1.n] uma lista com parâmetros do escoamento (flow_list) \t
+            [1.o] uma lista com os parametros geométricos do circuito escoamento (geometric_list)
+        [2] - Return: [du/dz, dp/dz, dh/dz]
     '''
     
     #unpack
     u, p, h = uph
-    (mdotL_e, MM, h_e, T_e, Cp, xRe) = pack_list
+    (mdotL_e, MM, h_e, T_e, Cp, xRe, xRe_mass) = flow_list
     (angleVenturi_in, angleVenturi_out, ks, D, Dvt, ziv, zig, zfg, zfv) = geometric_list
     
-    #simple calculation
-    CpL = np.einsum('i,i', xRe, Cp)  
+    #simple computations
+    CpL = FlowTools_obj.jpDias_liquidSpecificHeat(T_e, p_e, xRe_mass)
     T = T_e + (h - h_e) / CpL
     Ac, rc = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, Zduct)
     Dc = 2. * rc
     Gt = mdotL_e / Ac
     Gt2 = np.power(Gt, 2)
-    #transport property
-    viscL = FlowTools_obj.viscosidadeMonofasico(T, p, xRe)
     
     
-    def therm_function():
+    
+    def therm_function(density_model='ELV'):
         '''this function calls external thermal (objects) tools \n
         
         Return: spvolL_e, spvolL'''
-        densL_e = prop_obj.calculate_density_phase(p_e, T_e, MM, xRe, "liquid")
+        density_models = ['ELV', 'jpDias']
+        if density_model not in density_models:
+            msg = 'Invalid density model in --> %s' % sys._getframe().f_code.co_name
+            msg += '\t Choose one of the models: %s' % density_models
+            raise Exception(msg)
+        if density_model == 'ELV':
+            densL_e = prop_obj.calculate_density_phase(p_e, T_e, MM, xRe, "liquid")
+            densL = prop_obj.calculate_density_phase(p, T, MM, xRe, "liquid")
+        elif density_model == 'jpDias':
+            densL_e = FlowTools_obj.jpDias_liquidPhaseDensity(T_e, p_e, xRe_mass)
+            densL = FlowTools_obj.jpDias_liquidPhaseDensity(T, p, xRe_mass)
         spvolL_e = np.power(densL_e, -1) 
-        densL = prop_obj.calculate_density_phase(p, T, MM, xRe, "liquid")
         spvolL = np.power(densL, -1) 
         return spvolL_e, spvolL
 
-    spvolL_e, spvolL = therm_function()
+    spvolL_e, spvolL = therm_function(density_model='ELV')
 
     def beta_function():
         '''this function calculates thermal expansion coefficient - beta \n
@@ -272,6 +289,8 @@ def systemEDOsinglePhase(uph, Zduct, deltaZ, pack_list, geometric_list):
 
     def dAdZ_function():
         '''derivative approx. to evaluate dAdZ [m2/m] and area average [m2] \n
+        dAdZ: delta Area / delta Z \n 
+        avrgA: average Area \n 
 
         Return: dAdZ, avrgA
         '''
@@ -282,48 +301,18 @@ def systemEDOsinglePhase(uph, Zduct, deltaZ, pack_list, geometric_list):
         return (deltaA / deltaZ), avrgA
 
     dAdZ, avrgA = dAdZ_function()
+
     
-
-    def frictionFactor_Colebrook():  
-        '''this Colebrook function determines the Fanning friction factor \n
-        
-        Return: f_F
-        ''' 
-        Re_mon = Gt * Dc / viscL   
-        colebrook = lambda f0 : 1.14 - 2. * np.log10(ks / Dc + 9.35 / (Re_mon * np.sqrt(f0))) -1 / np.sqrt(f0) 
-        f_D = optimize.newton(colebrook, 0.02)  #Darcy 
-        if Re_mon > 3000.: f_F = f_D / 4.
-        else: f_F = 16. / Re_mon
-        return f_F
-
-    # def fanningFactor_Churchill1977():
-    #     '''
-    #     Churchill equation to estimate Fanning friction factor, f_F, (pg 149, Ron Darby's book) \n
-    #     Can be applied for all flow regimes in single phase \n
-    #     Re_mon: Single phase Reynolds number [-] \n
-    #     ks: rugosity [m] \n
-    #     Dc: diameter [m] \n
-
-    #     Return: f_F
-    #     '''
-    #     Re_mon = Gt * Dc / viscL 
-    #     f1 = 7. / Re_mon
-    #     f2 = 0.27 * ks/Dc
-    #     a = 2.457 * np.log(1. / (f1 ** 0.9 + f2))
-    #     A = a ** 16
-    #     b = 37530. / Re_mon
-    #     B = b ** 16
-    #     f3 = 8. / Re_mon
-    #     return  2 * (f3 ** 12 + 1./(A + B) ** 1.5 ) ** (1. / 12)
+    Re_mon = FlowTools_obj.reynolds_function(Gt, Dc, p, T, xRe, xRe_mass, visc_model='NISSAN')
+    f_F = FlowTools_obj.frictionFactorFanning(Re_mon, ks, Dc, friction_model='Colebrook')
+    # print('Em Zduct =', Zduct, '\t valor de Re =', Re_mon)
+    if np.abs(Zduct - 0.640) < 1e-2:
+        print('Em Z = ', Zduct, 'Re = ', Re_mon, 'Veloc = ', u) 
     
-    f_F = frictionFactor_Colebrook()
-    # f_F = fanningFactor_Churchill1977()
-
     A11, A12, A13 = np.power(u,-1), 0., (- beta / CpL)     
     A21, A22, A23 = u, spvolL, 0.
     A31, A32, A33 = u, 0., 1.
 
-    # f_F = fanningFactor(Re_mon, ks, Dc)
 
     aux = -2.0 * Gt2 * np.power(spvolL, 2) * (f_F / Dc )
     C1, C2, C3 = (- dAdZ / avrgA), aux, aux
@@ -349,7 +338,7 @@ Zduct, deltaZ = np.linspace(0, Ld, pointsNumber + 1, retstep=True)
 # fh = open("saida_.txt","w")
 Zduct_crit = np.array([ziv, zig, zfg, zfv]) 
 uph_singlephase = integrate.odeint(systemEDOsinglePhase, uph_0, Zduct, 
-                    args=(deltaZ, pack_list, geometric_list), tcrit = Zduct_crit)
+                    args=(deltaZ, flow_list, geometric_list), tcrit = Zduct_crit)
 # fh.close()
 
 
@@ -360,20 +349,25 @@ h = uph_singlephase[:,2]
 pB_v = pB * np.ones_like(Zduct)
 
 
-def taking_p150mm():
+def taking_SpecificGeometricPosition(array, target):
     '''
-    This function select the pressure at position Zduct = 150mm \n
-    Why? to compare simulated results with Dalton's experimental data \n
+    This function will find an interested value in a vector \n 
 
-    Return: p150mm, point_Zduct150mm
+    target: a specific position [same vector's unit] \n
+    
+    E.g., in case vector position Zduct = 150mm, you must use: target = 0.150
+
+    Return: index  (the index/position of the interested value in the vector)
      '''
-    point_Zduct150mm = int(0.150/deltaZ)
-    p150mm = p[point_Zduct150mm - 1]
-    return p150mm, point_Zduct150mm
+    index = (np.abs(array - target)).argmin()
+    return index
 
-p150mm, point_Zduct150mm = taking_p150mm()
 
-CpL = np.einsum('i,i', xRe, Cp)  # -- capacidade térmica líquido subresfriado [J/(kg K)] (@ solução ideal)
+
+
+
+
+CpL = FlowTools_obj.jpDias_liquidSpecificHeat(T_e, p_e, xRe_mass)
 T = T_e + (h - h_e) / CpL
 
 
@@ -386,6 +380,39 @@ T = T_e + (h - h_e) / CpL
 
 
 # #[9]=========================== PLOTTING =====================
+ 
+index_Z_150mm = taking_SpecificGeometricPosition(Zduct, 0.150)
+# print('taking index of vector where Zduct = 150mm', index_Z_150mm) 
+
+index_Z_640mm = taking_SpecificGeometricPosition(Zduct, 0.640)
+print('taking index of vector where Zduct = 640mm', index_Z_640mm) 
+pinter = p[index_Z_640mm]
+hinter = h[index_Z_640mm]
+Tinter = T_e + (hinter - h_e) / CpL
+densL_inter = prop_obj.calculate_density_phase(pinter, Tinter, MM, xRe, "liquid") 
+spcfVolL_inter = np.power(densL_inter, -1)
+Acinter, rcinter = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, 0.640)
+Gtinter = mdotL_e / Acinter
+rinho = np.linspace(-D/2, D/2, 101)
+
+R = D/2.
+ur = np.zeros_like(rinho)
+for i,r in enumerate(rinho):
+    ur[i] = 2 * Gtinter * spcfVolL_inter * (1. - (r/R)**2)
+    
+
+# print(ur)
+# ucopy = np.copy(ur)
+# utotal = np.concatenate((ur, ucopy))
+# rinhocopy = - np.copy(rinho)
+# rtotal = np.concatenate((rinho, rinhocopy))
+
+plt.figure(figsize=(7,5))
+#plt.xlim(0.6,0.8)
+plt.ylabel('r [mm]')
+plt.xlabel('u [m/s]')
+plt.plot(ur, rinho * 1e3)
+# plt.legend(['$u_{incompressivel}$ ao longo do duto'], loc=1)
 
 
 # plt.figure(figsize=(7,5))
@@ -404,18 +431,20 @@ T = T_e + (h - h_e) / CpL
 # plt.legend(['$u_{incompressivel}$ ao longo do duto'], loc=1) #loc=2 vai para canto sup esq
 
 
-plt.figure(figsize=(7,5))
-plt.title('Grafico comparativo com pg 81 Tese Dalton Gt baseado 16mm')
-plt.grid(True)
-plt.xlabel('Z* [m]')
-plt.ylabel('p - p#1 [Pascal]')
-plt.plot((Zduct[(point_Zduct150mm-1):] - 0.150), (p[(point_Zduct150mm - 1):] - p150mm))
-plt.xlim(0.0, 0.9)
-# plt.ylim(8e5, 10e5)
-# plt.legend(['Pressao Esc. Incompressivel'], loc=3)
-# plt.plot(Zduct, pB_v)
-# plt.legend(['Pressao Esc. Incompressivel', 'Pressão Saturação'], loc=3)
-plt.legend('Pressão Esc. Incompressível', loc=1)
+
+# plt.figure(figsize=(7,5))
+# plt.title('Grafico comparativo com pg 81 Tese Dalton Gt baseado 16mm')
+# plt.grid(True)
+# plt.xlabel('Z* [m]')
+# plt.ylabel('p - p#1 [Pascal]')
+# # plt.plot((Zduct[(point_Zduct150mm-1):] - 0.150), (p[(point_Zduct150mm - 1):] - p150mm))
+# plt.plot((Zduct[index_Z_150mm: ] - 0.150), (p[index_Z_150mm: ] - p[index_Z_150mm]))
+# plt.xlim(0.0, 0.9)
+# # plt.ylim(8e5, 10e5)
+# # plt.legend(['Pressao Esc. Incompressivel'], loc=3)
+# # plt.plot(Zduct, pB_v)
+# # plt.legend(['Pressao Esc. Incompressivel', 'Pressão Saturação'], loc=3)
+# plt.legend('Pressão Esc. Incompressível', loc=1)
 
 # plt.figure(figsize=(7,5))
 # #plt.ylim(20,120)
