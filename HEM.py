@@ -305,7 +305,6 @@ def systemEDOsinglePhase(uph, Zduct, deltaZ, flow_list, geometric_list):
     
     Re_mon = FlowTools_obj.reynolds_function(Gt, Dc, p, T, xRe, xRe_mass, visc_model='NISSAN')
     f_F = FlowTools_obj.frictionFactorFanning(Re_mon, ks, Dc, friction_model='Colebrook')
-    # print('Em Zduct =', Zduct, '\t valor de Re =', Re_mon)
     if np.abs(Zduct - 0.640) < 1e-2:
         print('Em Z = ', Zduct, 'Re = ', Re_mon, 'Veloc = ', u) 
     
