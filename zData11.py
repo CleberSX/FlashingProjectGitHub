@@ -1,4 +1,5 @@
 import numpy as np
+from CoolProp.CoolProp import PropsSI
 import Tools_Convert
 from Molecule import Molecule
 from kij_parameter import Kij_class
@@ -39,7 +40,7 @@ Cp: specific heat [J / kg K]   !<=== HERE IT IS IN MASS BASE, BUT IT IS CONVERTE
 
 '''OBS-1: For while, I don't have specific heat lubrificant oil POE-ISO-VG-10'''
 
-MM = np.array([102.03, 425.])
+MM = np.array([102.03, 425.]) 
 specific_heat_mass_base = np.array([0.82421, 1.539]) * 1.e3  # [J / kg K] @ 20ºC (Coolpropgit available on: http://ibell.pythonanywhere.com; see OBS-1)
 specific_heat = Tools_Convert.convert_specific_heat_massbase_TO_molarbase(specific_heat_mass_base, MM)
 
