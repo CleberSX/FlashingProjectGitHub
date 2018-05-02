@@ -153,7 +153,7 @@ class Bubble_class:
                 assert step <= max_loop, '\n\n\t --->> If this msg pop up it\'s because you reached the max_loop. So, ' \
                                          'you must increase the current [max_loop = %i] in ' \
                                          'the {bubble_main_function}. Why? It\'s because probably you\'re still in ' \
-                                         'stable region' % max_loop
+                                         'stable region for the temperatura [K] = %.2f' % (max_loop, T)
         x = z #In bubble problems, the feed is totally liquid
         f_L, Z_L = eos_obj.calculate_fugacities_with_minimum_gibbs_energy(p, T, x, 'liquid')
         PHI_L = f_L / (x * p)
@@ -205,8 +205,8 @@ bubble_obj = Bubble_class(pC, Tc, AcF, kij)
   INPUT DATA:
 =========================================================================================================
 '''
-T = (10. + 273.15)   # <=================================== change here
-LC, base = 99./100, 'mass' # <=============================== change here
+T =  (70. + 273.15)   # <=================================== change here
+LC, base = 80./100, 'mass' # <=============================== change here
 zin = np.array([LC, (1. - LC)])
 z, z_mass = Tools_Convert.frac_input(MM, zin, base)
 pG = 1.2 * bubble_obj.pressure_guess(T, z)

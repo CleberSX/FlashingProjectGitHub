@@ -46,13 +46,15 @@ IMPORTING MOLECULAR & EXPERIMENTAL DATA (when you have experimental data)
 
 (pC, Tc, AcF, MM, omega_a, omega_b, kij, Cp) = props
 
-(refrigerant_global_mass_fraction_expData_10Celsius, bubble_pressure_10Celsius,
-            refrigerant_global_mass_fraction_expData_20Celsius, bubble_pressure_20Celsius,
-            refrigerant_global_mass_fraction_expData_30Celsius, bubble_pressure_30Celsius,
-            refrigerant_global_mass_fraction_expData_40Celsius, bubble_pressure_40Celsius,
-            refrigerant_global_mass_fraction_expData_50Celsius, bubble_pressure_50Celsius,
-            refrigerant_global_mass_fraction_expData_60Celsius, bubble_pressure_60Celsius,
-            ) = exp_data
+(
+refrigerant_global_mass_fraction_expData_107Celsius, bubble_pressure_107Celsius,
+refrigerant_global_mass_fraction_expData_202Celsius, bubble_pressure_202Celsius,
+refrigerant_global_mass_fraction_expData_302Celsius, bubble_pressure_302Celsius,
+refrigerant_global_mass_fraction_expData_406Celsius, bubble_pressure_406Celsius,
+refrigerant_global_mass_fraction_expData_505Celsius, bubble_pressure_505Celsius,
+refrigerant_global_mass_fraction_expData_600Celsius, bubble_pressure_600Celsius
+) = exp_data
+
 
 
 '''
@@ -74,9 +76,9 @@ bubble_obj = Bubble_class(pC, Tc, AcF, kij)
 ===================================
 '''
 
-T_list = np.array([10.7, 20.2, 30.2, 40.7, 50.6, 60.], float) + 273.15
+T_list = np.array([10.7, 20.2, 30.2, 40.6, 50.5, 60], float) + 273.15
 CN = T_list.shape[0]
-LC_mass_list = np.linspace(0.01, 0.99, 11) #Lighter component list
+LC_mass_list = np.linspace(0.05, 0.95, 11) #Lighter component list
 LN = LC_mass_list.shape[0]
 CompN = MM.shape[0] #components number
 Pbubble_store = np.zeros([LN, CN]) #matrix with LN lines and CN columns
@@ -114,22 +116,23 @@ colors = ['r', 'b', 'k', 'y', 'm', 'c', 'g', 'lightgray']
 markers = ['o', 'v', '<', '>', '.', 'p', 'P', 's', '*']
 
 
-plt.title('Bubble Pressure of Mixture of ' + comp1.name + comp2.name + '(Dados Artigo Moisés)')
+plt.title('Bubble Pressure of Mixture of ' + comp1.name + ' $versus$ ' + comp2.name + ' (Dados RefProp)')
 for i in np.arange(CN):
     plt.plot(LC_mass_list, Pbubble_store[:, i],
              color = colors[i], marker = '', lw = 1.5,
              ls = '-', label = 'T = %.2f [C]' % (T_list[i] - 273.15)) #ls: lineshape
-plt.plot(refrigerant_global_mass_fraction_expData_10Celsius, bubble_pressure_10Celsius, color = colors[0],
-         marker = markers[0], ls='', label='Exp. Data 10.7 Celsius')
-plt.plot(refrigerant_global_mass_fraction_expData_20Celsius, bubble_pressure_20Celsius, color = colors[1],
-         marker = markers[1], ls='', label='Exp. Data 20.2 Celsius')
-plt.plot(refrigerant_global_mass_fraction_expData_30Celsius, bubble_pressure_30Celsius, color = colors[2],
-         marker = markers[2], ls='', label='Exp. Data 30.2 Celsius')
-plt.plot(refrigerant_global_mass_fraction_expData_40Celsius, bubble_pressure_40Celsius, color = colors[3],
-         marker = markers[3], ls='', label='Exp. Data 40.7 Celsius')
-plt.plot(refrigerant_global_mass_fraction_expData_50Celsius, bubble_pressure_50Celsius, color = colors[4],
-         marker = markers[4], ls='', label='Exp. Data 50.6 Celsius')
-plt.plot(refrigerant_global_mass_fraction_expData_60Celsius, bubble_pressure_60Celsius, color = colors[5],
+#Now we              
+plt.plot(refrigerant_global_mass_fraction_expData_107Celsius, bubble_pressure_107Celsius, color = colors[0],
+         marker = markers[0], ls='', label='Exp. Data 10.0 Celsius')
+plt.plot(refrigerant_global_mass_fraction_expData_202Celsius, bubble_pressure_202Celsius, color = colors[1],
+         marker = markers[1], ls='', label='Exp. Data 20.0 Celsius')
+plt.plot(refrigerant_global_mass_fraction_expData_302Celsius, bubble_pressure_302Celsius, color = colors[2],
+         marker = markers[2], ls='', label='Exp. Data 30.0 Celsius')
+plt.plot(refrigerant_global_mass_fraction_expData_406Celsius, bubble_pressure_406Celsius, color = colors[3],
+         marker = markers[3], ls='', label='Exp. Data 40.0 Celsius')
+plt.plot(refrigerant_global_mass_fraction_expData_505Celsius, bubble_pressure_505Celsius, color = colors[4],
+         marker = markers[4], ls='', label='Exp. Data 50.0 Celsius')
+plt.plot(refrigerant_global_mass_fraction_expData_600Celsius, bubble_pressure_600Celsius, color = colors[5],
          marker = markers[5], ls='', label='Exp. Data 60.0 Celsius')
 plt.xlabel('[lighter component (kg kg$^{-1}$)]')
 plt.ylabel('Bubble Pressure [Pa]')

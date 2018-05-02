@@ -44,9 +44,10 @@ class Properties(PengRobinsonEos):
 
         Return: rho
         '''
+        
         _f, Z = self.calculate_fugacities_with_minimum_gibbs_energy(p, T, x, fluid_type)
         M = self.calculate_weight_molar_mixture(MM, x, fluid_type)
-        rho = p * M /(Z * R * T)
+        rho = p * M / (Z * R * T)
         return rho
 
 

@@ -74,9 +74,11 @@ class PengRobinsonEos:
         return g
     
     def calculate_fugacities_with_minimum_gibbs_energy(self, P, T, x, fluid_type):
-        # calculating all roots and if it has two possible roots
-        # calculate both minimim gibbs energy and choose the 
-        # group of fugacities with minimum gibbs energy
+        '''
+         calculating all roots and if it has two possible roots
+         calculate both minimim gibbs energy and choose the 
+         group of fugacities with minimum gibbs energy
+        '''
 
         self.update_eos_coefficients(P, T, x) #Without this line the entire program fails
 

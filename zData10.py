@@ -22,7 +22,7 @@ Cp: specific heat [J / kg K]   !<=== HERE IT IS IN MASS BASE, BUT IT IS CONVERTE
 
 comp1 = Molecule("butante", 58.122, 425.13, 3.796e6, 0.201, 1.587e3)
 comp2 = Molecule("octane", 114.23, 569.32, 2.497e6, 0.395, 1.5378e3)
-kij = 0.0120
+kij = 0.0 #0.0120
 
 
 if __name__ == '__main__':
@@ -42,7 +42,7 @@ def input_properties_case_REFPROP___ButaneOctane(comp1, comp2, kij):
     '''
 
     critical_pressure = np.array([comp1.pC, comp2.pC])
-    critical_temperature = np.array([comp1.Tc, comp2.Tc])
+    critical_temperature = np.array([comp1.TC, comp2.TC])
     acentric_factor = np.array([comp1.AcF, comp2.AcF])
     molar_mass = np.array([comp1.MM, comp2.MM])
     omega_a = 0.45724 * np.ones_like(molar_mass)

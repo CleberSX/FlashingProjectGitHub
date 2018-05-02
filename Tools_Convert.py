@@ -44,6 +44,8 @@ def convert_massfrac_TO_molarfrac(molar_mass, mass_fraction):
 
 
     x = (fm/MM) / [sum(fm/MM)]
+
+    Return: molar_fraction
     '''
     MM = molar_mass
     fm = mass_fraction

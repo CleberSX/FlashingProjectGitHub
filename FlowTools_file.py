@@ -101,7 +101,7 @@ class FlowTools_class():
 
         Return: densL
         '''
-        wr = xR_mass[0] * 100.
+        wr = xR_mass[0] #* 100.
         Tc = T - 273.15
 
         densO = 966.43636 - 0.57391608 * Tc - 0.00024475524 * Tc ** 2
@@ -202,16 +202,18 @@ class FlowTools_class():
             The liquid viscosity depend of the model you've been chosen \n
             For while, there are just two options for liquid viscosity \n
         '''
+        nome_desta_funcao = sys._getframe().f_code.co_name
+
         visc_models = ['jpDias', 'NISSAN']
         if visc_model not in visc_models:
-            msg = 'Invalid viscosity model inside function: %s' % sys._getframe().f_code.co_name
+            msg = 'Invalid viscosity model inside function: %s' % nome_desta_funcao
             msg += '\t Choose one of the models: %s' % visc_models
             raise Exception(msg)
         if visc_model == 'NISSAN':
             viscL = self.viscosidadeMonofasicoSEC(T, p, xR)
         elif visc_model == 'jpDias':
             viscL = self.jpDias_liquidViscositySEC(T, p, xR_mass)
-        return Gt * Dc / viscL 
+        return Gt * Dc / (viscL) 
 
     
 
@@ -252,9 +254,12 @@ class FlowTools_class():
     
     def frictionFactorFanning(self, Re, ks, Dc, friction_model='Colebrook'):
         '''This is the function/method we must call to calculate Fanning friction factor'''
+
+        nome_desta_funcao = sys._getframe().f_code.co_name
+
         friction_models = ['Colebrook', 'Churchill']
         if friction_model not in friction_models:
-            msg = 'Invalid friction model inside the function: %s' % sys._getframe().f_code.co_name
+            msg = 'Invalid friction model inside the function: %s' % nome_desta_funcao
             msg += '\t Choose one of the models: %s' % friction_models
             raise Exception(msg)
         if friction_model == 'Churchill':
