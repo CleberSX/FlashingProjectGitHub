@@ -1,19 +1,24 @@
 import numpy as np 
 import sys
 from scipy import optimize
+from Properties import Properties
 from CoolProp.CoolProp import PropsSI
 
 R = 8314.34                         # J / (kmol K)
 
 
-class FlowTools_class():
-    '''THIS CLASS IS NECESSARY TO CALCULATE FLUID PROPERTIES: SINGLE PHASE & TWO PHASE \t
-    D: diameter [m] \t
-    mdotL: subcooled mass rate [kg/s]
-    Gt: superficial total mass flux [(kg/s)/m2]
+class FlowTools_class(Properties):
+    '''THIS CLASS IS NECESSARY TO CALCULATE FLUID PROPERTIES: SINGLE PHASE & TWO PHASE \n
+    D: diameter [m] \n
+    mdotL: subcooled mass rate [kg/s] \n
+    Gt: superficial total mass flux [(kg/s)/m2] \n
     '''
-    def __init__(self, mdotL):
+    
+
+    def __init__(self, Pc, Tc, ω, Ω_a, Ω_b, κ_ij, mdotL):
+        super().__init__(Pc, Tc, ω, Ω_a, Ω_b, κ_ij)
         self.mdotL = mdotL
+    
     
     
     def __str__(self):
@@ -51,42 +56,8 @@ class FlowTools_class():
         spvolTP = self.volumeEspecificaBifasico(x, p, T, MMixture, spvolF)
         return (spvolG * x / spvolTP)
 
-    def viscO_functionSEC(self, T):
 
-        '''
-        This function calculate the POE ISO VG 10 viscosity \n
-    
-        T: temperature [K] \n
-        Oil Viscosity: in [Pa.s] \n
-
-
-        This correlation has been gotten from: \n 
-        Tese de doutorado do Dalton Bertoldi (2014), page 82 \n
-
-        "Investigação Experimental de Escoamentos Bifásicos com mudança \n
-        de fase de uma mistura binária em tubo de Venturi" \n
-         '''
-        Tc = T - 273.15
-        return 0.04342 * np.exp(- 0.03529 * Tc)
-
-
-    def viscR_functionSEC(self, T, p):
-        '''
-        This function calls CoolProp \n 
-
-        T: temperature [K] \n
-        p: pressure [Pa] \n
-
-
-        Return: Refrigerant's dynamic viscosity [Pa.s]
-        '''
-        
-        return PropsSI("V", "T", T, "P", p,"R134a")
-
-    
-
-
-    def jpDias_liquidPhaseDensity(self, T, p, xR_mass):
+    def liquidPhaseDensity_jpDias_SEC(self, T, p, xR_mass):
         ''' 
         The correlation was copied from JP Dias's Thesis (pg 294, EQ A.2) \n
 
@@ -101,7 +72,7 @@ class FlowTools_class():
 
         Return: densL
         '''
-        wr = xR_mass[0] #* 100.
+        wr = xR_mass[0] 
         Tc = T - 273.15
 
         densO = 966.43636 - 0.57391608 * Tc - 0.00024475524 * Tc ** 2
@@ -110,7 +81,63 @@ class FlowTools_class():
         return densL
 
 
-    def jpDias_liquidViscositySEC(self, T, p, xR_mass):
+     
+
+
+    def specificVolumeLiquid_Wrap(self, p, T, MM, xR, xR_mass, density_model='jpDias'):
+        '''
+        This function chooses density from EXperimental CORrelation ('jpDias') or from THErmodynamics ('ELV') \n
+
+        T: temperature [K] \n
+        p: pressure [Pa] \n
+        MM: vector with molar weight of each component "i" [kg/kmol], i.e., (MM = ([MMrefrig, MMpoe])) 
+        xR: vector molar concentration [-], i.e., (xR = ([xRrefrig, xOpoe])) \n
+        xR_mass: vector mass concentration [-] (xR_mass = ([xR_mass, xO_mass])) \n
+        spvolL: specific volume from correlation 'jpDias' or from 'ELV' [m3/kg] \n
+
+        Return: spvolL'''
+
+        nome_desta_funcao = sys._getframe().f_code.co_name
+
+        density_models = ['ELV', 'jpDias']
+        if density_model not in density_models:
+            msg = 'Invalid density model in --> %s' % nome_desta_funcao
+            msg += '\t Choose one of the models: %s' % density_models
+            raise Exception(msg)
+        if density_model == 'ELV':
+            densL = super().calculate_density_phase(p, T, MM, xR, fluid_type='liquid')
+        elif density_model == 'jpDias':
+            densL = self.liquidPhaseDensity_jpDias_SEC(T, p, xR_mass)
+        spvolL = np.power(densL, -1) 
+        return spvolL
+
+    def liquidSpecificHeat_jpDias(self, T, p, xR_mass):
+        ''' 
+        The correlation was copied from JP Dias's Thesis (pg 295, EQ A.7) \n
+
+        ESCOAMENTO DE ÓLEO E REFRIGERANTE PELA FOLGA PISTÃO-CILINDRO DE 
+        COMPRESSORES HERMÉTICOS ALTERNATIVOS (2012) - UFSC \n
+
+        T: temperature [K] \n
+        p: pressure [Pa] \n
+        xR_mass: vector mass concentration [-] (xR_mass = ([xR_mass, xO_mass])) \n
+
+        This correlation is valid only in interval: ? \n
+        
+
+        Return: cpL [J/kg K] (?...tenho verificar se são essas as unidades!!)
+        '''
+        Tc = T - 273.15
+        wr = xR_mass[0] 
+        
+        CpR = PropsSI("Cpmass", "T", T, "P", p,"R134a")
+        CpO = 2411.5968 + 2.260872 * Tc
+        return (1. - wr) * CpO + wr * CpR
+
+    
+
+
+    def liquidViscosity_jpDias_SEC(self, T, p, xR_mass):
 
         ''' 
         The correlation was copied from JP Dias's Thesis (pg 294, EQ A.4) \n
@@ -145,36 +172,11 @@ class FlowTools_class():
             e2 * np.power(wr, 2) + f2 * Tc * wr )
 
         viscCinem = num / den
-        densL = self.jpDias_liquidPhaseDensity(T, p, xR_mass)
+        densL = self.liquidPhaseDensity_jpDias_SEC(T, p, xR_mass)
         return viscCinem * densL * 1e-6
-     
-
-    def jpDias_liquidSpecificHeat(self, T, p, xR_mass):
-        ''' 
-        The correlation was copied from JP Dias's Thesis (pg 295, EQ A.7) \n
-
-        ESCOAMENTO DE ÓLEO E REFRIGERANTE PELA FOLGA PISTÃO-CILINDRO DE 
-        COMPRESSORES HERMÉTICOS ALTERNATIVOS (2012) - UFSC \n
-
-        T: temperature [K] \n
-        p: pressure [Pa] \n
-        xR_mass: vector mass concentration [-] (xR_mass = ([xR_mass, xO_mass])) \n
-
-        This correlation is valid only in interval: ? \n
-        
-
-        Return: cpL [J/kg K] (?...tenho verificar se são essas as unidades!!)
-        '''
-        Tc = T - 273.15
-        wr = xR_mass[0] 
-        
-        CpR = PropsSI("Cpmass", "T", T, "P", p,"R134a")
-        CpO = 2411.5968 + 2.260872 * Tc
-        return (1. - wr) * CpO + wr * CpR
 
 
-
-    def viscosidadeMonofasicoSEC(self, T, p, xR, G12 = 3.5):
+    def liquidViscosityNISSAN_SEC(self, T, p, xR, G12 = 3.5):
         '''
         GRUNBERG & NISSAN (1949) correlation - see Dalton Bertoldi's Thesis (page 81) \n
         Objective: necessary to determine the subcooled liquid's viscosity \n
@@ -183,15 +185,55 @@ class FlowTools_class():
         xR: vector molar concentration ([xR, xO]) \n
         G12: model's parameter (G12 = 3.5 has been taken from Dalton's Thesis (page 82)) \n
         Refrigerant viscosity is get from CoolProp \n
-        viscO: Oil's dynamic viscosity [Pa.s] \n
-        viscR: Refrigerant's dynamic viscosity [Pa.s]
+        viscO: POE ISO VG 10 viscosity [Pa.s] \n
+        viscR: R134a's dynamic viscosity [Pa.s]
+
+        ==============================================================================
+        ViscO correlation has been gotten from: \n 
+        Tese de doutorado do Dalton Bertoldi (2014), page 82 \n
+
+        "Investigação Experimental de Escoamentos Bifásicos com mudança \n
+        de fase de uma mistura binária em tubo de Venturi" \n
         '''
-        viscO = self.viscO_functionSEC(T)
-        viscR = self.viscR_functionSEC(T, p)
+        Tc = T - 273.15
+        viscO = 0.04342 * np.exp(- 0.03529 * Tc)
+        viscR = PropsSI("V", "T", T, "P", p,"R134a")
         logvisc = np.array([np.log(viscR),np.log(viscO)])
         sum_xlogvisc = np.einsum('i,i', xR, logvisc)
         xRxO_G12 = np.prod(xR) * G12
         return np.exp(sum_xlogvisc + xRxO_G12)
+
+
+    def liquidViscosity_Wrap(self, p, T, xR, xR_mass, visc_model='jpDias'):
+        '''
+        This function/method choose the fluid single phase viscosity \n
+        
+        For while, there are just two options for liquid viscosity: 'jpDias' correlation or 'NISSAN' model \n
+
+        For more informations about 'jpDias' and 'NISSAN' you must read jpDias_liquidViscositySEC() and 
+
+        T: temperature [K] \n
+        p: pressure [Pa] \n
+        xR: vector molar concentration ([xR, xO]) \n
+        xR_mass: vector mass concentration [-] (xR_mass = ([xR_mass, xO_mass])) \n
+        visc_model: 'jpDias' or 'NISSAN' \n
+        viscL: liquid viscosity [Pa.s] \n
+
+        Return: viscL
+        '''
+        nome_desta_funcao = sys._getframe().f_code.co_name
+
+        visc_models = ['jpDias', 'NISSAN']
+        if visc_model not in visc_models:
+            msg = 'Invalid viscosity model inside function: %s' % nome_desta_funcao
+            msg += '\t Choose one of the models: %s' % visc_models
+            raise Exception(msg)
+        if visc_model == 'NISSAN':
+            viscL = self.liquidViscosityNISSAN_SEC(T, p, xR)
+        elif visc_model == 'jpDias':
+            viscL = self.liquidViscosity_jpDias_SEC(T, p, xR_mass)
+        return viscL
+
 
 
 
@@ -202,20 +244,12 @@ class FlowTools_class():
             The liquid viscosity depend of the model you've been chosen \n
             For while, there are just two options for liquid viscosity \n
         '''
-        nome_desta_funcao = sys._getframe().f_code.co_name
-
-        visc_models = ['jpDias', 'NISSAN']
-        if visc_model not in visc_models:
-            msg = 'Invalid viscosity model inside function: %s' % nome_desta_funcao
-            msg += '\t Choose one of the models: %s' % visc_models
-            raise Exception(msg)
-        if visc_model == 'NISSAN':
-            viscL = self.viscosidadeMonofasicoSEC(T, p, xR)
-        elif visc_model == 'jpDias':
-            viscL = self.jpDias_liquidViscositySEC(T, p, xR_mass)
+        
+        viscL = self.liquidViscosity_Wrap(p, T, xR, xR_mass, visc_model)
         return Gt * Dc / (viscL) 
 
     
+
 
     def frictionChurchillSEC(self, Re, ks, Dc):
         '''
@@ -252,7 +286,7 @@ class FlowTools_class():
         return f_F
     
     
-    def frictionFactorFanning(self, Re, ks, Dc, friction_model='Colebrook'):
+    def frictionFactorFanning_Wrap(self, Re, ks, Dc, friction_model='Colebrook'):
         '''This is the function/method we must call to calculate Fanning friction factor'''
 
         nome_desta_funcao = sys._getframe().f_code.co_name
@@ -269,6 +303,8 @@ class FlowTools_class():
         return f_F
 
 
+
+
     def viscosidadeBifasicaSEC(self, x, xR, p, T, MMixture, spvolF):
         '''
         x: vapor quality [-] \t
@@ -278,7 +314,7 @@ class FlowTools_class():
         spvolF: specific volume saturated liquid [m3/kg]
          '''
         viscG = 12e-6 #valor qqer...temporário...preciso entrar com uma equação aqui
-        viscF = self.viscosidadeMonofasicoSEC(T, p, xR)
+        viscF = self.liquidViscosityNISSAN_SEC(T, p, xR)
         alfa = self.fracaoVazio(x, p, T, MMixture, spvolF)
         return (alfa * viscG + viscF * (1. - alfa) * (1. + 2.5 * alfa))  #Eqc 8.33, pag 213 Ghiaasiaan
 

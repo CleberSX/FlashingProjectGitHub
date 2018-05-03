@@ -45,7 +45,7 @@ class Properties(PengRobinsonEos):
         Return: rho
         '''
         
-        _f, Z = self.calculate_fugacities_with_minimum_gibbs_energy(p, T, x, fluid_type)
+        _f, Z = super().calculate_fugacities_with_minimum_gibbs_energy(p, T, x, fluid_type)
         M = self.calculate_weight_molar_mixture(MM, x, fluid_type)
         rho = p * M / (Z * R * T)
         return rho
@@ -72,7 +72,7 @@ class Properties(PengRobinsonEos):
            On Edmister's book the parameter "B" that appears in (5.85A and 5.94A) is given by equation (5.14)...
                         ... and the parameter "b" is given by equation (5.65).
         '''
-        self.update_eos_coefficients(p, T, x)
+        super().update_eos_coefficients(p, T, x)
         α, κ_ij, Pc, Tc = self.α_function(T), self.κ_ij, self.Pc, self.Tc
         ω, m, Ω_a, Ω_b = self.ω, self.m, self.Ω_a, self.Ω_b
         acj = Ω_a * (R * Tc)**2 / Pc # [5.10]
@@ -115,7 +115,7 @@ class Properties(PengRobinsonEos):
         :p: pressure [Pa]
         '''
         self.update_parameters(p, T, x)
-        _f, Z = self.calculate_fugacities_with_minimum_gibbs_energy(p, T, x, fluid_type)
+        _f, Z = super().calculate_fugacities_with_minimum_gibbs_energy(p, T, x, fluid_type)
         # print('Considering T = %.2f and P = %.2e ==> valor of Z = %.5f to %s phase' % (T, p, Z, fluid_type))
         h_i = (Z - 1.0)
         h_ii = self.A / (2 * SQRT_2 * self.B)
@@ -139,7 +139,7 @@ class Properties(PengRobinsonEos):
         '''
         p0 = 101325.
         self.update_parameters(p, T, x)
-        _f, Z = self.calculate_fugacities_with_minimum_gibbs_energy(p, T, x, fluid_type)
+        _f, Z = super().calculate_fugacities_with_minimum_gibbs_energy(p, T, x, fluid_type)
         s_i = np.log(Z - self.B)
         s_ii = self.A / (2 * SQRT_2 * self.B) * (1. - self.TdadT / self.a )
         s_iii = (Z + (SQRT_2 + 1.0) * self.B ) / (Z - (SQRT_2 - 1.0) * self.B )

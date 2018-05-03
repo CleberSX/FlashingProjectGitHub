@@ -100,7 +100,7 @@ R = 8314.34                         # J / (kmol K)
 '''
 (pC, Tc, AcF, MM, omega_a, omega_b, kij, Cp) = props
 (TR, hR_mass, sR_mass) = input_reference_values_function()
-(p_e, T_e, mdotL_e) = FlowData() # <=============================== change here
+(p_e, T_e, mdotL_e, fmR134a) = FlowData() # <=============================== change here
 (angleVenturi_in, angleVenturi_out, ks, Ld, D, Dvt, ziv, zig, zfg, zfv) = PipeData() # <=============================== change here
 
 
@@ -131,7 +131,8 @@ def solution_concentration_set_function(lightComponent, MM, base):
     xRe, xRe_mass = Tools_Convert.frac_input(MM, zin, base)
     return xRe, xRe_mass
 
-xRe, xRe_mass = solution_concentration_set_function((0.05/100), MM, 'mass')
+xRe, xRe_mass = solution_concentration_set_function(fmR134a, MM, 'mass')
+
 
 
 
@@ -144,7 +145,8 @@ def saturationPressure_ResidualProperties_MolarMixture():
     sR = sR_mass * prop_obj.calculate_weight_molar_mixture(MM, xRe, 'saturated_liquid')
     # pG = 1.2 * bubble_obj.pressure_guess(T_e, xRe)
     pB, _y, _Sy, _counter = bubble_obj(T_e, xRe)
-    #pB = bubble_obj(T_e, xRe)[0]
+    pB = bubble_obj(T_e, xRe)[0]
+    print('Bubble pressure', pB)
     # y_mass = Tools_Convert.convert_molarfrac_TO_massfrac(MM, y)
     MMixture = prop_obj.calculate_weight_molar_mixture(MM, xRe,"liquid")
     return (hR, sR, pB, MMixture)
@@ -161,18 +163,16 @@ CREATING MORE NECESSARY OBJECTS
 eos_obj = PengRobinsonEos(pC, Tc, AcF, omega_a, omega_b, kij)
 hsFv_obj = HSFv(pC, TR, Tc, AcF, Cp, MM, hR, sR) #to obtain enthalpy
 
-FlowTools_obj = FlowTools_class(mdotL_e)
-viscL_e = FlowTools_obj.viscosidadeMonofasicoSEC(T_e, p_e, xRe)
-viscL_jpDias = FlowTools_obj.jpDias_liquidViscositySEC(T_e, p_e, xRe_mass)
-densL_jpDias = FlowTools_obj.jpDias_liquidPhaseDensity(T_e, p_e, xRe_mass)
-densL_e_ELV = prop_obj.calculate_density_phase(p_e, T_e, MM, xRe, "liquid")
+FlowTools_obj = FlowTools_class(pC, Tc, AcF, omega_a, omega_b, kij, mdotL_e)
+# viscL_jpDias = FlowTools_obj.liquidViscosity_Wrap(p_e, T_e, xRe, xRe_mass, visc_model='jpDias')
+# viscL_NISSAN = FlowTools_obj.liquidViscosity_Wrap(p_e, T_e, xRe, xRe_mass, visc_model='NISSAN')
+spvolL_e = FlowTools_obj.specificVolumeLiquid_Wrap(p_e, T_e, MM, xRe, xRe_mass, density_model='jpDias')
 
 
 
-# print('viscosidade líquido subresfriado - entrada duto Dalton [Pa.s] ', viscL_e)
 # print('viscosidade líquido subresfriado - entrada duto jpDias [Pa.s] ', viscL_jpDias)
-# print('densidade líquido subresfriado - entrada duto jpDias [kg m-3] ', densL_jpDias)
-# print('densidade líquido subresfriado - entrada duto ELV [kg m-3] ', densL_e_ELV)
+# print('viscosidade líquido subresfriado - entrada duto tese Dalton [Pa.s] ', viscL_NISSAN)
+print('densidade líquido subresfriado - entrada duto ELV [kg m-3] vinda da wrap ', (1. / spvolL_e))
 #print(twoPhaseFlowTools_obj)
 
 
@@ -204,9 +204,7 @@ def initialValues_function():
     Return: u_e, p_e, h_e
     '''
     Ac_e, _rc_e = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, 0.0)
-    # densL_e = prop_obj.calculate_density_phase(p_e, T_e, MM, xRe, "liquid") 
-    densL_e = FlowTools_obj.jpDias_liquidPhaseDensity(T_e, p_e, xRe_mass)
-    spvolL_e = np.power(densL_e,-1) 
+    spvolL_e = FlowTools_obj.specificVolumeLiquid_Wrap(p_e, T_e, MM, xRe, xRe_mass, density_model='jpDias') 
     u_e = (mdotL_e * spvolL_e) / Ac_e                  # Para obter u_e (subcooled liquid)
     _F_V, h_e, _s_e = hsFv_obj(p_e, T_e, xRe)            #Para obter h_e (subcooled liquid, so F_V = 0)
     return (u_e, p_e, h_e)
@@ -222,7 +220,7 @@ uph_0 = [u_e, p_e, h_e]
 # --> https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.odeint.html
 
 geometric_list = (angleVenturi_in, angleVenturi_out, ks, D, Dvt, ziv, zig, zfg, zfv)
-flow_list = (mdotL_e, MM, h_e, T_e, Cp, xRe, xRe_mass)
+flow_list = (mdotL_e, MM, h_e, T_e, xRe, xRe_mass)
 def systemEDOsinglePhase(uph, Zduct, deltaZ, flow_list, geometric_list):
     '''
     Objetivo: resolver um sistema de EDO's em z para u, p e h com linalg.solve; \t
@@ -246,43 +244,21 @@ def systemEDOsinglePhase(uph, Zduct, deltaZ, flow_list, geometric_list):
     
     #unpack
     u, p, h = uph
-    (mdotL_e, MM, h_e, T_e, Cp, xRe, xRe_mass) = flow_list
+    (mdotL_e, MM, h_e, T_e, xRe, xRe_mass) = flow_list
     (angleVenturi_in, angleVenturi_out, ks, D, Dvt, ziv, zig, zfg, zfv) = geometric_list
     
-    #simple computations
-    # CpL = FlowTools_obj.jpDias_liquidSpecificHeat(T_e, p_e, xRe_mass)
-    CpL = np.einsum('i,i', Cp, xRe)
+   
+    CpL = FlowTools_obj.liquidSpecificHeat_jpDias(T_e, p, xRe_mass)
     T = T_e + (h - h_e) / CpL
     Ac, rc = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, Zduct)
     Dc = 2. * rc
     Gt = mdotL_e / Ac
     Gt2 = np.power(Gt, 2)
     
+    spvolL_e = FlowTools_obj.specificVolumeLiquid_Wrap(p_e, T_e, MM, xRe, xRe_mass, density_model='jpDias')
+    spvolL = FlowTools_obj.specificVolumeLiquid_Wrap(p, T, MM, xRe, xRe_mass, density_model='jpDias')
     
-    
-    def therm_function(density_model='jpDias'):
-        '''this function calls external thermal (objects) tools \n
-        
-        Return: spvolL_e, spvolL'''
 
-        nome_desta_funcao = sys._getframe().f_code.co_name
-
-        density_models = ['ELV', 'jpDias']
-        if density_model not in density_models:
-            msg = 'Invalid density model in --> %s' % nome_desta_funcao
-            msg += '\t Choose one of the models: %s' % density_models
-            raise Exception(msg)
-        if density_model == 'ELV':
-            densL_e = prop_obj.calculate_density_phase(p_e, T_e, MM, xRe, "liquid")
-            densL = prop_obj.calculate_density_phase(p, T, MM, xRe, "liquid")
-        elif density_model == 'jpDias':
-            densL_e = FlowTools_obj.jpDias_liquidPhaseDensity(T_e, p_e, xRe_mass)
-            densL = FlowTools_obj.jpDias_liquidPhaseDensity(T, p, xRe_mass)
-        spvolL_e = np.power(densL_e, -1) 
-        spvolL = np.power(densL, -1) 
-        return spvolL_e, spvolL
-
-    spvolL_e, spvolL = therm_function(density_model='jpDias')
 
     def beta_function():
         '''this function calculates thermal expansion coefficient - beta \n
@@ -313,12 +289,7 @@ def systemEDOsinglePhase(uph, Zduct, deltaZ, flow_list, geometric_list):
 
     
     Re_mon = FlowTools_obj.reynolds_function(Gt, Dc, p, T, xRe, xRe_mass, visc_model='NISSAN')
-    # print('posicao Zduct = ', Zduct, '\t Re = ', Re_mon)
-    f_F = FlowTools_obj.frictionFactorFanning(Re_mon, ks, Dc, friction_model='Colebrook')
-    if np.abs(Zduct - 0.150) < 9e-2:
-        densL = 1. / spvolL
-        print('Em Z = ', Zduct, 'Re = ', Re_mon, 'Veloc = ', u, 'densidade dentro', densL) 
-        
+    f_F = FlowTools_obj.frictionFactorFanning_Wrap(Re_mon, ks, Dc, friction_model='Colebrook')
     
     A11, A12, A13 = np.power(u,-1), 0., (- beta / CpL)     
     A21, A22, A23 = u, spvolL, 0.
@@ -378,7 +349,8 @@ def taking_SpecificGeometricPosition(array, target):
 
 
 
-CpL = FlowTools_obj.jpDias_liquidSpecificHeat(T_e, p_e, xRe_mass)
+CpL = FlowTools_obj.liquidSpecificHeat_jpDias(T_e, p_e, xRe_mass)
+
 T = T_e + (h - h_e) / CpL
 
 
@@ -401,9 +373,11 @@ pinter = p[index_Z_640mm]
 hinter = h[index_Z_640mm]
 Tinter = T_e + (hinter - h_e) / CpL
 # print('quem é meu xRe? ', xRe)
-densL_inter = prop_obj.calculate_density_phase(pinter, Tinter, MM, xRe, "liquid") 
-# print('olha a densidade do ELV', densL_inter)
-spcfVolL_inter = np.power(densL_inter, -1)
+# densL_inter = prop_obj.calculate_density_phase(pinter, Tinter, MM, xRe, "liquid") 
+spvolL_inter = FlowTools_obj.specificVolumeLiquid_Wrap(pinter, Tinter, MM, xRe, xRe_mass, density_model='jpDias')
+densL_inter = 1. / spvolL_inter
+print('olha a densidade do ELV', densL_inter)
+print('veja como é meu xRe = ', xRe, 'e também xRe_mass', xRe_mass)
 Acinter, rcinter = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, 0.640)
 Gtinter = mdotL_e / Acinter
 rinho = np.linspace(-D/2, D/2, 101)
@@ -411,33 +385,14 @@ rinho = np.linspace(-D/2, D/2, 101)
 R = D/2.
 ur = np.zeros_like(rinho)
 for i,r in enumerate(rinho):
-    ur[i] = 2 * Gtinter * spcfVolL_inter * (1. - (r/R)**2)
+    ur[i] = 2 * Gtinter * spvolL_inter * (1. - (r/R)**2)
     
-
-'''
-====================
-DELETE AFTER USE
-====================
-'''
-RefrigeranteInputMassFraction = np.linspace(0.05, 0.95, 10)
-size = RefrigeranteInputMassFraction.shape[0]
-densL_ELVp = np.ones_like(RefrigeranteInputMassFraction)
-molar = np.repeat(np.array([0., 0.])[None, :], size, axis=0)
-massa = np.repeat(np.array([0., 0.])[None, :], size, axis=0)
-
-for j,x in enumerate(RefrigeranteInputMassFraction):
-    molar[j], massa[j] = solution_concentration_set_function(x, MM, 'mass')
-    densL_ELVp[j] = prop_obj.calculate_density_phase(pinter, Tinter, MM, molar[j], "liquid")
-    # print('xR' ,molar[j], '\t\t xR_mass', massa[j], '\t\t densidade', densL_ELVp[j])
-
-'''
-====================
-'''
 
 
 
 # plt.figure(figsize=(7,5))
-# #plt.xlim(0.6,0.8)
+# plt.xlim(0.0,1.6)
+# plt.ylim(-8.0, 8.0)
 # plt.ylabel('r [mm]')
 # plt.xlabel('u [m/s]')
 # plt.plot(ur, rinho * 1e3)
