@@ -127,9 +127,12 @@ def solution_concentration_set_function(lightComponent, MM, base):
     lightComponent: example 5./100, 0.05/100, 30./100
     base: you must write 'mass' or 'molar'
     '''
+    
     zin = np.array([lightComponent, (1. - lightComponent)])
     xRe, xRe_mass = Tools_Convert.frac_input(MM, zin, base)
     return xRe, xRe_mass
+
+
 
 xRe, xRe_mass = solution_concentration_set_function(fmR134a, MM, 'mass')
 
@@ -146,7 +149,7 @@ def saturationPressure_ResidualProperties_MolarMixture():
     # pG = 1.2 * bubble_obj.pressure_guess(T_e, xRe)
     pB, _y, _Sy, _counter = bubble_obj(T_e, xRe)
     pB = bubble_obj(T_e, xRe)[0]
-    print('Bubble pressure', pB)
+    # print('Bubble pressure', pB)
     # y_mass = Tools_Convert.convert_molarfrac_TO_massfrac(MM, y)
     MMixture = prop_obj.calculate_weight_molar_mixture(MM, xRe,"liquid")
     return (hR, sR, pB, MMixture)
@@ -203,7 +206,7 @@ def initialValues_function():
     '''necessary in the Odeint numerical method
     Return: u_e, p_e, h_e
     '''
-    Ac_e, _rc_e = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, 0.0)
+    Ac_e = Area(0.0)
     spvolL_e = FlowTools_obj.specificVolumeLiquid_Wrap(p_e, T_e, MM, xRe, xRe_mass, density_model='jpDias') 
     u_e = (mdotL_e * spvolL_e) / Ac_e                  # Para obter u_e (subcooled liquid)
     _F_V, h_e, _s_e = hsFv_obj(p_e, T_e, xRe)            #Para obter h_e (subcooled liquid, so F_V = 0)
@@ -219,9 +222,10 @@ uph_0 = [u_e, p_e, h_e]
 # How to solve this system? See the page -->
 # --> https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.odeint.html
 
-geometric_list = (angleVenturi_in, angleVenturi_out, ks, D, Dvt, ziv, zig, zfg, zfv)
+#packing the parameters
 flow_list = (mdotL_e, MM, h_e, T_e, xRe, xRe_mass)
-def systemEDOsinglePhase(uph, Zduct, deltaZ, flow_list, geometric_list):
+#ODE system
+def systemEDOsinglePhase(uph, Zduct, deltaZ, flow_list, ks):
     '''
     Objetivo: resolver um sistema de EDO's em z para u, p e h com linalg.solve; \t
         [1] - Input: \t
@@ -245,12 +249,13 @@ def systemEDOsinglePhase(uph, Zduct, deltaZ, flow_list, geometric_list):
     #unpack
     u, p, h = uph
     (mdotL_e, MM, h_e, T_e, xRe, xRe_mass) = flow_list
-    (angleVenturi_in, angleVenturi_out, ks, D, Dvt, ziv, zig, zfg, zfv) = geometric_list
+    
     
    
     CpL = FlowTools_obj.liquidSpecificHeat_jpDias(T_e, p, xRe_mass)
     T = T_e + (h - h_e) / CpL
-    Ac, rc = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, Zduct)
+    Ac = Area(Zduct)
+    rc = np.sqrt(Ac / np.pi)
     Dc = 2. * rc
     Gt = mdotL_e / Ac
     Gt2 = np.power(Gt, 2)
@@ -272,20 +277,23 @@ def systemEDOsinglePhase(uph, Zduct, deltaZ, flow_list, geometric_list):
     
     beta = beta_function()
 
-    def dAdZ_function():
-        '''derivative approx. to evaluate dAdZ [m2/m] and area average [m2] \n
-        dAdZ: delta Area / delta Z \n 
-        avrgA: average Area \n 
-
-        Return: dAdZ, avrgA
+    
+    def dfdx(f, x, h=1e-5):
         '''
-        A1st, _rc1st = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, Zduct)
-        A2nd, _rc2nd = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, Zduct + deltaZ)
-        deltaA = A2nd - A1st
-        avrgA = (A2nd + A1st) / 2.
-        return (deltaA / deltaZ), avrgA
+        Evaluate a numeric derivative of function f(x) \n
 
-    dAdZ, avrgA = dAdZ_function()
+        f: any callable function, i.e., f(x) \n
+        x: variable \n
+        h: increment \n
+        f'(x) = dfdx: derivative of f(x)
+
+        Return: f'(x)
+        '''
+        return (f(x+h) - f(x)) / float(h)
+
+    avrgA = (Area(Zduct) + Area(Zduct + deltaZ)) / 2.
+    dAdZ = dfdx(Area, Zduct, h=deltaZ)    
+    
 
     
     Re_mon = FlowTools_obj.reynolds_function(Gt, Dc, p, T, xRe, xRe_mass, visc_model='NISSAN')
@@ -317,10 +325,11 @@ Zduct, deltaZ = np.linspace(0, Ld, pointsNumber + 1, retstep=True)
 
 
 #===================== SOLVING - INTEGRATING ========================
-# fh = open("saida_.txt","w")
+
 Zduct_crit = np.array([ziv, zig, zfg, zfv]) 
+# fh = open("saida_.txt","w")
 uph_singlephase = integrate.odeint(systemEDOsinglePhase, uph_0, Zduct, 
-                    args=(deltaZ, flow_list, geometric_list), tcrit = Zduct_crit)
+                    args=(deltaZ, flow_list, ks), tcrit = Zduct_crit)
 # fh.close()
 
 
@@ -356,7 +365,7 @@ T = T_e + (h - h_e) / CpL
 
 
 
-
+# print('tamanho de Zduct', Zduct.size)
 
 
 
@@ -378,7 +387,7 @@ spvolL_inter = FlowTools_obj.specificVolumeLiquid_Wrap(pinter, Tinter, MM, xRe, 
 densL_inter = 1. / spvolL_inter
 print('olha a densidade do ELV', densL_inter)
 print('veja como é meu xRe = ', xRe, 'e também xRe_mass', xRe_mass)
-Acinter, rcinter = Area(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, 0.640)
+Acinter = Area(0.640)
 Gtinter = mdotL_e / Acinter
 rinho = np.linspace(-D/2, D/2, 101)
 

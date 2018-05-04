@@ -15,12 +15,12 @@ class RachfordRice:
         self.F_Vmax = 0.999 / (1.0 - np.max(K_values))
         
     @staticmethod
-    def function_to_be_solve(F_Vguess, z, K_values):
+    def function_to_be_solved(F_Vguess, z, K_values):
         try:
             c = ( 1.0 / (K_values - 1.0) )
         except ZeroDivisionError as MyPersonalMsg:
             print("Divisão por zero no cálculo do parâmetro 'C' em "
-                  "function_to_be_solve na class RachfordRice", MyPersonalMsg)
+                  "function_to_be_solved na class RachfordRice", MyPersonalMsg)
             
         return np.sum(z / (c + F_Vguess))
             
@@ -31,7 +31,7 @@ class RachfordRice:
 
         
         try:
-            F_V, converged = brentq(RachfordRice.function_to_be_solve, F_Vmin, F_Vmax, args=(z, K_values),  xtol=1e-16,
+            F_V, converged = brentq(RachfordRice.function_to_be_solved, F_Vmin, F_Vmax, args=(z, K_values),  xtol=1e-16,
                                     full_output=True, disp=True)
             if converged is False:
                 raise Exception('Fora da regiao bifasica ' + str(converged))

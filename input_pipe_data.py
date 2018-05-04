@@ -27,14 +27,14 @@ def input_pipe_data_function():
 
     angleVenturi_in = np.deg2rad(39.96621 / 2.)                                   
     angleVenturi_out = np.deg2rad(13.99038 / 2.)                                   
-    rugosity = 2.6e-3 #1.5e-3 , 2.5e-3                                      # ks
-    lenght = 1100e-3                                         # Ld
+    rugosity = 2.6e-3 #1.5e-3 , 2.6e-3                      # ks
+    lenght = 1100e-3                                        # Ld
     diameter = 16e-3                                        # D
     diameterVenturiThroat = 4e-3                            # Dvt
     initialVenturiCoordinate = 682e-3                       # ziv
     initialVenturiThroatCoordinate = 698.5e-3               # zig
     lastVenturiThroatCoordinate = 701.5e-3                  # zfg
-    lastVenturiCoordinate = 750.4e-3                          # zfv
+    lastVenturiCoordinate = 750.4e-3                        # zfv
 
 
     return (angleVenturi_in, angleVenturi_out, rugosity, lenght, diameter, diameterVenturiThroat,
@@ -44,12 +44,15 @@ def input_pipe_data_function():
 
 
 
-def areaVenturiPipe_function(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig, zfg, zfv, z):
+(angleVenturi_in, angleVenturi_out, ks, Ld, D, Dvt, ziv, zig, zfg, zfv) = input_pipe_data_function()
+
+
+def areaVenturiPipe_function(z):
     ''' 
     THIS FUNCTION CALCULATES THE PIPE CROSS SECTION AREA, WHICH DEPENDS ON 
-    AT DUCT POSITION, i.e., Ac = Ac(z)  \n
+    DUCT POSITION, i.e., Ac = Ac(z)  \n
 
-    Return: Ac, rc
+    
 
     angleVenturi_in: entrance venturi angle [rad] \n
     angleVenturi_out: outlet venturi angle [rad] \n
@@ -61,7 +64,9 @@ def areaVenturiPipe_function(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig
     zfv: coordinate where venturi ends [m] 
     z: pipe position [m] \n 
     rc: cross section radius, i.e., rc = rc(z) [m] \n
-    Ac: area cross section where Ac = Ac(z) [m2]
+    Ac: area cross section where Ac = Ac(z) [m2] \n
+
+    Return: Ac
     '''
     
     
@@ -81,7 +86,7 @@ def areaVenturiPipe_function(angleVenturi_in, angleVenturi_out, D, Dvt, ziv, zig
 
     Ac = np.pi * rc ** 2 
     
-    return Ac, rc
+    return Ac
 
 
         
