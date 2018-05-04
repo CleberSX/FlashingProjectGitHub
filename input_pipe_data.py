@@ -27,7 +27,7 @@ def input_pipe_data_function():
 
     angleVenturi_in = np.deg2rad(39.96621 / 2.)                                   
     angleVenturi_out = np.deg2rad(13.99038 / 2.)                                   
-    rugosity = 2.6e-3 #1.5e-3 , 2.6e-3                      # ks
+    rugosity = 2.60e-3 #1.5e-3 , 2.6e-3                      # ks
     lenght = 1100e-3                                        # Ld
     diameter = 16e-3                                        # D
     diameterVenturiThroat = 4e-3                            # Dvt
@@ -69,10 +69,10 @@ def areaVenturiPipe_function(z):
     Return: Ac
     '''
     
-    
+    global angleVenturi_in, angleVenturi_out, Ld, D, Dvt, ziv, zig, zfg, zfv
+
+
     rvt = Dvt / 2.
-
-
     if (ziv < z < zig): rc = rvt + (zig - z) * np.tan(angleVenturi_in) 
     elif (zig <= z <= zfg): rc = rvt 
     elif (zfg < z < zfv): rc = rvt + (z - zfg) * np.tan(angleVenturi_out)

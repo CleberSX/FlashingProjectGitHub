@@ -1,5 +1,5 @@
 import numpy as np
-from Math_Roots import FindZ
+from MathTools import FindZ
 
 R = 8314  # [J/(kmol*K)]
 SQRT_2 = np.sqrt(2)
