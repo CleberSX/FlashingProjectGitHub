@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging, sys
 import numpy as np 
+from MathTools import dfdx
 from scipy import integrate, optimize
 from scipy.misc import derivative
 import matplotlib.pyplot as plt
@@ -169,13 +170,13 @@ hsFv_obj = HSFv(pC, TR, Tc, AcF, Cp, MM, hR, sR) #to obtain enthalpy
 FlowTools_obj = FlowTools_class(pC, Tc, AcF, omega_a, omega_b, kij, mdotL_e)
 # viscL_jpDias = FlowTools_obj.liquidViscosity_Wrap(p_e, T_e, xRe, xRe_mass, visc_model='jpDias')
 # viscL_NISSAN = FlowTools_obj.liquidViscosity_Wrap(p_e, T_e, xRe, xRe_mass, visc_model='NISSAN')
-spvolL_e = FlowTools_obj.specificVolumeLiquid_Wrap(p_e, T_e, MM, xRe, xRe_mass, density_model='jpDias')
+spcvolL_e = FlowTools_obj.specificVolumeLiquid_Wrap(p_e, T_e, MM, xRe, xRe_mass, density_model='jpDias')
 
 
 
 # print('viscosidade líquido subresfriado - entrada duto jpDias [Pa.s] ', viscL_jpDias)
 # print('viscosidade líquido subresfriado - entrada duto tese Dalton [Pa.s] ', viscL_NISSAN)
-print('densidade líquido subresfriado - entrada duto ELV [kg m-3] vinda da wrap ', (1. / spvolL_e))
+print('densidade líquido subresfriado - entrada duto ELV [kg m-3] vinda da wrap ', (1. / spcvolL_e))
 #print(twoPhaseFlowTools_obj)
 
 
@@ -207,8 +208,8 @@ def initialValues_function():
     Return: u_e, p_e, h_e
     '''
     Ac_e = Area(0.0)
-    spvolL_e = FlowTools_obj.specificVolumeLiquid_Wrap(p_e, T_e, MM, xRe, xRe_mass, density_model='jpDias') 
-    u_e = (mdotL_e * spvolL_e) / Ac_e                  # Para obter u_e (subcooled liquid)
+    spcvolL_e = FlowTools_obj.specificVolumeLiquid_Wrap(p_e, T_e, MM, xRe, xRe_mass, density_model='jpDias') 
+    u_e = (mdotL_e * spcvolL_e) / Ac_e                  # Para obter u_e (subcooled liquid)
     _F_V, h_e, _s_e = hsFv_obj(p_e, T_e, xRe)            #Para obter h_e (subcooled liquid, so F_V = 0)
     return (u_e, p_e, h_e)
 
@@ -223,9 +224,9 @@ uph_0 = [u_e, p_e, h_e]
 # --> https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.odeint.html
 
 #packing the parameters
-flow_list = (mdotL_e, MM, h_e, T_e, xRe, xRe_mass)
+extra_parameters = (mdotL_e, MM, h_e, T_e, xRe, xRe_mass, ks)
 #ODE system
-def systemEDOsinglePhase(uph, Zduct, deltaZ, flow_list, ks):
+def systemEDOsinglePhase(uph, Zduct, deltaZ, extra_parameters):
     '''
     Objetivo: resolver um sistema de EDO's em z para u, p e h com linalg.solve; \t
         [1] - Input: \t
@@ -248,10 +249,10 @@ def systemEDOsinglePhase(uph, Zduct, deltaZ, flow_list, ks):
     
     #unpack
     u, p, h = uph
-    (mdotL_e, MM, h_e, T_e, xRe, xRe_mass) = flow_list
+    (mdotL_e, MM, h_e, T_e, xRe, xRe_mass, ks) = extra_parameters
     
     
-   
+    #calculating CpL, radius, Gt, area
     CpL = FlowTools_obj.liquidSpecificHeat_jpDias(T_e, p, xRe_mass)
     T = T_e + (h - h_e) / CpL
     Ac = Area(Zduct)
@@ -260,93 +261,76 @@ def systemEDOsinglePhase(uph, Zduct, deltaZ, flow_list, ks):
     Gt = mdotL_e / Ac
     Gt2 = np.power(Gt, 2)
     
-    spvolL_e = FlowTools_obj.specificVolumeLiquid_Wrap(p_e, T_e, MM, xRe, xRe_mass, density_model='jpDias')
-    spvolL = FlowTools_obj.specificVolumeLiquid_Wrap(p, T, MM, xRe, xRe_mass, density_model='jpDias')
+    #specific liquid volume in different temperatures
+    spcvolL_e = FlowTools_obj.specificVolumeLiquid_Wrap(p_e, T_e, MM, xRe, xRe_mass, density_model='jpDias')
+    spcvolL = FlowTools_obj.specificVolumeLiquid_Wrap(p, T, MM, xRe, xRe_mass, density_model='jpDias')
     
-
-
-    def beta_function():
-        '''this function calculates thermal expansion coefficient - beta \n
-        
-        Return: beta value
+    #area average
+    avrg_A = (Area(Zduct) + Area(Zduct + 1e-5)) / 2. #Be careful! 1e-5 it's the same value used to 'h' in dfdx
+    dAdZ = dfdx(Area, Zduct)    
+    
+    #calculating beta
+    def spcvolL_function_only_of_T(T, density_model='jpDias'):
         '''
-        if (T - T_e) != 0.0: spvolLdT = (spvolL - spvolL_e) / (T - T_e) 
-        else: spvolLdT = 0.0 
-        avrg_spvolL = (spvolL + spvolL_e) / 2.
-        return np.power(avrg_spvolL, -1) * spvolLdT
-    
-    beta = beta_function()
+        This function has been created to force specific volume to be a function of temperature only \n 
+        It was necessary because beta depends on derivative of specific volume with temperature\n
 
-    
-    def dfdx(f, x, h=1e-5):
+        Return: specificVolumeLiquid = f(T)
         '''
-        Evaluate a numeric derivative of function f(x) \n
-
-        f: any callable function, i.e., f(x) \n
-        x: variable \n
-        h: increment \n
-        f'(x) = dfdx: derivative of f(x)
-
-        Return: f'(x)
-        '''
-        return (f(x+h) - f(x)) / float(h)
-
-    avrgA = (Area(Zduct) + Area(Zduct + deltaZ)) / 2.
-    dAdZ = dfdx(Area, Zduct, h=deltaZ)    
+        return  FlowTools_obj.specificVolumeLiquid_Wrap(p, T, MM, xRe, xRe_mass, density_model)
     
-
+    avrg_SpcvolL = (spcvolL_function_only_of_T(T) + spcvolL_function_only_of_T(T+1e-5)) / 2. #Be careful! 1e-5 it's the same value used to 'h' in dfdx
+    dspcvolLdT = dfdx(spcvolL_function_only_of_T, T)
+    beta = np.power(avrg_SpcvolL, -1) * dspcvolLdT
     
+    #friction factor
     Re_mon = FlowTools_obj.reynolds_function(Gt, Dc, p, T, xRe, xRe_mass, visc_model='NISSAN')
     f_F = FlowTools_obj.frictionFactorFanning_Wrap(Re_mon, ks, Dc, friction_model='Colebrook')
     
+    #setting the matrix coefficients
     A11, A12, A13 = np.power(u,-1), 0., (- beta / CpL)     
-    A21, A22, A23 = u, spvolL, 0.
+    A21, A22, A23 = u, spcvolL, 0.
     A31, A32, A33 = u, 0., 1.
 
-
-    aux = -2.0 * Gt2 * np.power(spvolL, 2) * (f_F / Dc )
-    C1, C2, C3 = (- dAdZ / avrgA), aux, aux
+    aux = -2.0 * Gt2 * np.power(spcvolL, 2) * (f_F / Dc )
+    C1, C2, C3 = (- dAdZ / avrg_A), aux, aux
     
     
     matrizA = np.array([[A11,A12,A13],[A21,A22,A23],[A31,A32,A33]])
     RHS_C = np.array([C1, C2, C3])
     dudz, dpdz, dhdz = np.linalg.solve(matrizA, RHS_C)
+
     return [dudz, dpdz, dhdz]
 
- 
 
-#[7] ==============FUNÇÃO A SER INTEGRADA =================
-#source: https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.odeint.html
-
-#=================== CREATING VECTORS POINTS =============================
+#CREATING VECTORS POINTS 
 pointsNumber = 1000
 Zduct, deltaZ = np.linspace(0, Ld, pointsNumber + 1, retstep=True)
 
 
-
-#===================== SOLVING - INTEGRATING ========================
-
+#SOLVING - INTEGRATING 
 Zduct_crit = np.array([ziv, zig, zfg, zfv]) 
 # fh = open("saida_.txt","w")
 uph_singlephase = integrate.odeint(systemEDOsinglePhase, uph_0, Zduct, 
-                    args=(deltaZ, flow_list, ks), tcrit = Zduct_crit)
+                    args=(deltaZ, extra_parameters), tcrit = Zduct_crit)
 # fh.close()
 
 
-# #[8] ================= UNPACKING THE RESULTS =================
+# UNPACKING THE RESULTS 
 u = uph_singlephase[:,0]
 p = uph_singlephase[:,1]
 h = uph_singlephase[:,2]
 pB_v = pB * np.ones_like(Zduct)
 
 
+
+
+
 def taking_SpecificGeometricPosition(array, target):
     '''
     This function will find an interested value in a vector \n 
-
     target: a specific position [same vector's unit] \n
-    
-    E.g., in case vector position Zduct = 150mm, you must use: target = 0.150
+    E.g., in case vector position Zduct = 150mm, you must use: target = 0.150 \n
 
     Return: index  (the index/position of the interested value in the vector)
      '''
@@ -365,10 +349,6 @@ T = T_e + (h - h_e) / CpL
 
 
 
-# print('tamanho de Zduct', Zduct.size)
-
-
-
 
 
 # #[9]=========================== PLOTTING =====================
@@ -383,8 +363,8 @@ hinter = h[index_Z_640mm]
 Tinter = T_e + (hinter - h_e) / CpL
 # print('quem é meu xRe? ', xRe)
 # densL_inter = prop_obj.calculate_density_phase(pinter, Tinter, MM, xRe, "liquid") 
-spvolL_inter = FlowTools_obj.specificVolumeLiquid_Wrap(pinter, Tinter, MM, xRe, xRe_mass, density_model='jpDias')
-densL_inter = 1. / spvolL_inter
+spcvolL_inter = FlowTools_obj.specificVolumeLiquid_Wrap(pinter, Tinter, MM, xRe, xRe_mass, density_model='jpDias')
+densL_inter = 1. / spcvolL_inter
 print('olha a densidade do ELV', densL_inter)
 print('veja como é meu xRe = ', xRe, 'e também xRe_mass', xRe_mass)
 Acinter = Area(0.640)
@@ -394,7 +374,7 @@ rinho = np.linspace(-D/2, D/2, 101)
 R = D/2.
 ur = np.zeros_like(rinho)
 for i,r in enumerate(rinho):
-    ur[i] = 2 * Gtinter * spvolL_inter * (1. - (r/R)**2)
+    ur[i] = 2 * Gtinter * spcvolL_inter * (1. - (r/R)**2)
     
 
 
