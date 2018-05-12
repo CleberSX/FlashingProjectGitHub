@@ -4,10 +4,12 @@ import sys
 
 #=======================
 'What does to do in this file input_flow_data.py? ' \
-'JUST uncomment one of the cases below'
+'JUST uncomment one of the cases below' \
+'case = (case_name, R134a_concentration, mdotLe, temperature, pressure)'
+
 #=======================
-case = ('case0', 0.05/100, 0.122549, 36.5, 8.92)  
-# case = ('case1', 16.1/100, 0.122811, 36.7, 4.79)
+# case = ('case0', 0.05/100, 0.122549, 36.5, 8.92)
+case = ('case1', 16.1/100, 0.122811, 36.7, 4.79)
 # case = ('case2', 21.7/100, 0.122669, 36.7, 5.80)
 # case = ('case3', 30.1/100, 0.122438, 36.8, 7.16)
 # case = ('case4', 39.4/100, 0.122898, 36.8, 7.96)

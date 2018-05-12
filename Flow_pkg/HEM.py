@@ -183,6 +183,7 @@ def saturationPressure_ResidualProperties_MolarMixture_function():
 (hR, sR, pB, MMixture) = saturationPressure_ResidualProperties_MolarMixture_function()
 
 
+logging.warning('bubble pressure' + str(pB))
 
 '''
 =================================================================================================================
@@ -240,11 +241,11 @@ uph_0 = [u_e, p_e, h_e]
 
 #[6]============================ MAIN - CODE =========================================
 #packing the parameters to get in systemEDOsinglePhase()
-models = {'density':density_models['_jpDias'], 'viscosity':viscosity_models['_NISSAN'],
+singlePhaseModels = {'density':density_models['_jpDias'], 'viscosity':viscosity_models['_NISSAN'],
           'friction':friction_models['_Colebrook']}
-fixed_parameters = (mdotL_e, h_e, T_e, z, z_mass, ks)
+singlePhaseFixedParameters = (mdotL_e, h_e, T_e, z, z_mass, ks)
 #ODE system
-def systemEDOsinglePhase(uph, l, incrl, fixed_parameters, models):
+def systemEDOsinglePhase(uph, l, incrl, singlePhaseFixedParameters, singlePhaseModels):
     '''
     Target: resolver um sistema de EDO's em z para u, p e h com linalg.solve; \t
         [1] - Input: \n
@@ -265,10 +266,15 @@ def systemEDOsinglePhase(uph, l, incrl, fixed_parameters, models):
         [2] - Return: [du/dl, dp/dl, dh/dl]
     '''
     ''''''
-    #unpack
+    # unpack
     u, p, h = uph
-    (mdotL_e, h_e, T_e, z, z_mass, ks) = fixed_parameters
-    #calculating CpL, radius, Gt, area
+    (mdotL_e, h_e, T_e, z, z_mass, ks) = singlePhaseFixedParameters
+
+    if p > pB:
+        logging.warning('thats ok until now' + str(p))
+    elif p <= pB:
+        logging.warning('the code will crash because much lower pressure' + str(p))
+    # calculating CpL, radius, Gt, area
     CpL = FlowTools_obj.specificLiquidHeat_jpDias(T_e, p, z_mass)
     T = T_e + (h - h_e) / CpL
     Ac = Area(l)
@@ -278,14 +284,14 @@ def systemEDOsinglePhase(uph, l, incrl, fixed_parameters, models):
     Gt2 = np.power(Gt, 2)
     
 
-    spcvolL = FlowTools_obj.specificVolumeLiquid_Wrap(p, T, MM, z, z_mass, models['density'])
+    spcvolL = FlowTools_obj.specificVolumeLiquid_Wrap(p, T, MM, z, z_mass, singlePhaseModels['density'])
     
-    #area average
+    # area average
     dl = 1e-5
-    avrg_A = (Area(l) + Area(l + dl)) / 2. #Be careful! 1e-5 it's the same value used to 'h' in dfdx
+    avrg_A = (Area(l) + Area(l + dl)) / 2. # Be careful! 1e-5 it's the same value used to 'h' in dfdx
     dAdl = derivative(Area, l, dl)
     
-    #calculating beta
+    # calculating beta
     def spcvolL_function_only_of_T(T):
         '''
         This function has been created to force specific volume to be a function of temperature only \n 
@@ -293,18 +299,18 @@ def systemEDOsinglePhase(uph, l, incrl, fixed_parameters, models):
 
         Return: specificVolumeLiquid = f(T)
         '''
-        return  FlowTools_obj.specificVolumeLiquid_Wrap(p, T, MM, z, z_mass, models['density'])
+        return FlowTools_obj.specificVolumeLiquid_Wrap(p, T, MM, z, z_mass, singlePhaseModels['density'])
     dT = 1e-5
-    avrg_SpcvolL = (spcvolL_function_only_of_T(T) + spcvolL_function_only_of_T(T + dT)) / 2. #Be careful! 1e-5 it's the same value used to 'h' in dfdx
+    avrg_SpcvolL = (spcvolL_function_only_of_T(T) + spcvolL_function_only_of_T(T + dT)) / 2. # Be careful! 1e-5 it's the same value used to 'h' in dfdx
     dspcvolLdT = derivative(spcvolL_function_only_of_T, T, dT)
     beta = np.power(avrg_SpcvolL, -1) * dspcvolLdT
     
-    #friction factor
-    viscL = FlowTools_obj.viscosityLiquid_Wrap(p, T, z, z_mass, models['viscosity'])
+    # friction factor
+    viscL = FlowTools_obj.viscosityLiquid_Wrap(p, T, z, z_mass, singlePhaseModels['viscosity'])
     Re_mon = FlowTools_obj.reynolds_function(Gt, Dc, viscL)
-    f_F = FlowTools_obj.frictionFactorFanning_Wrap(Re_mon, ks, Dc, models['friction'])
+    f_F = FlowTools_obj.frictionFactorFanning_Wrap(Re_mon, ks, Dc, singlePhaseModels['friction'])
     
-    #setting the matrix coefficients
+    # setting the matrix coefficients
     A11, A12, A13 = np.power(u,-1), 0., (- beta / CpL)     
     A21, A22, A23 = u, spcvolL, 0.
     A31, A32, A33 = u, 0., 1.
@@ -312,141 +318,31 @@ def systemEDOsinglePhase(uph, l, incrl, fixed_parameters, models):
     aux = -2.0 * Gt2 * np.power(spcvolL, 2) * (f_F / Dc )
     C1, C2, C3 = (- dAdl / avrg_A), aux, aux
 
-    
     matrizA = np.array([[A11,A12,A13],[A21,A22,A23],[A31,A32,A33]])
     RHS_C = np.array([C1, C2, C3])
     dudl, dpdl, dhdl = np.linalg.solve(matrizA, RHS_C)
 
     return [dudl, dpdl, dhdl]
-#CREATING VECTORS POINTS 
+# CREATING VECTORS POINTS
 pointsNumber = 1000
 l, incril = np.linspace(0, L, pointsNumber + 1, retstep=True)
-#SOLVING - INTEGRATING 
+# SOLVING - INTEGRATING
 l_crit = np.array([liv, lig, lfg, lfv])
 uph_singlephase = integrate.odeint(systemEDOsinglePhase, uph_0, l,
-                    args=(incril, fixed_parameters, models), tcrit = l_crit)
+                    args=(incril, singlePhaseFixedParameters, singlePhaseModels), tcrit = l_crit)
 # UNPACKING THE RESULTS 
 u = uph_singlephase[:,0]
 p = uph_singlephase[:,1]
 h = uph_singlephase[:,2]
 pB_v = pB * np.ones_like(l)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# #[9]=========================== PLOTTING =====================
-
-CpL = FlowTools_obj.specificLiquidHeat_jpDias(T_e, p_e, z_mass)
-T = T_e + (h - h_e) / CpL
-
-
-index_l_150mm = find(l, 0.150)
-# print('taking index of vector where l = 150mm', index_l_150mm)
-
-index_l_640mm = find(l, 0.640)
-# print('taking index of vector where l = 640mm', index_l_640mm)
-pinter = p[index_l_640mm]
-hinter = h[index_l_640mm]
-Tinter = T_e + (hinter - h_e) / CpL
-# print('quem é meu z? ', z)
-
-
-spcvolL_inter = FlowTools_obj.specificVolumeLiquid_Wrap(pinter, Tinter, MM, z, z_mass, density_models['_jpDias'])
-densL_inter = 1. / spcvolL_inter
-print('olha a densidade do ELV', densL_inter)
-print('veja como é meu z = ', z, 'e também z_mass', z_mass)
-Acinter = Area(0.640)
-Gtinter = mdotL_e / Acinter
-rinho = np.linspace(-D/2, D/2, 101)
-
-
-
-# q = 0.4
-# viscF = FlowTools_obj.viscosityLiquid_Wrap(p, T, z, z_mass, 'jpDias')
-# spcvolG = FlowTools_obj.specificVolumGas(p, T, MM, z)
-# spcvolF = FlowTools_obj.specificVolumeLiquid_Wrap(p, T, MM, z, z_mass, density_model='jpDias')
-# spcvol2P = FlowTools_obj.specificVolumeTwoPhase(q, spcvolG, spcvolF)
-# visc2P = FlowTools_obj.viscosityTwoPhase(q,spcvolG, spcvol2P, viscF, visc2Phase_model='Dukler')
-# logging.warning('viscosidade bifásica deu certo?' + str(visc2P))
-
-R = D/2.
-ur = np.zeros_like(rinho)
-for i,r in enumerate(rinho):
-    ur[i] = 2 * Gtinter * spcvolL_inter * (1. - (r/R)**2)
-    
-
-
-
-# plt.figure(figsize=(7,5))
-# plt.xlim(0.0,1.6)
-# plt.ylim(-8.0, 8.0)
-# plt.ylabel('r [mm]')
-# plt.xlabel('u [m/s]')
-# plt.plot(ur, rinho * 1e3)
-# # plt.legend(['$u_{incompressivel}$ ao longo do duto'], loc=1)
-
-
-# plt.figure(figsize=(7,5))
-# #plt.ylim(20,120)
-# plt.xlabel('l [m]')
-# plt.ylabel('T [K]')
-# plt.plot(l, T)
-# plt.legend(['Temperatura Esc. Incompressivel'], loc=3)
-
-
-# plt.figure(figsize=(7,5))
-# #plt.xlim(0.6,0.8)
-# plt.xlabel('l [m]')
-# plt.ylabel('u [m/s]')
-# plt.plot(l, u)
-# plt.legend(['$u_{incompressivel}$ ao longo do duto'], loc=1) #loc=2 vai para canto sup esq
-
-
-
-plt.figure(figsize=(7,5))
-plt.title('Grafico comparativo com pg 81 Tese Dalton')
-plt.grid(True)
-plt.xlabel('$l$* [m]')
-plt.ylabel('(p - p#1) [Pascal]')
-# plt.plot((l[(point_l150mm-1):] - 0.150), (p[(point_l150mm - 1):] - p150mm))
-plt.plot((l[index_l_150mm: ] - 0.150), (p[index_l_150mm: ] - p[index_l_150mm]))
-plt.xlim(0.0, 0.9)
-# plt.ylim(8e5, 10e5)
-# plt.legend(['Pressao Esc. Incompressivel'], loc=3)
-# plt.plot(l, pB_v)
-# plt.legend(['Pressao Esc. Incompressivel', 'Pressão Saturação'], loc=3)
-plt.legend('Pressão Esc. Incompressível', loc=1)
-
-# plt.figure(figsize=(7,5))
-# #plt.ylim(20,120)
-# plt.xlabel('l [m]')
-# plt.ylabel('H [J/kg]')
-# plt.plot(l, h)
-# plt.legend(['$h_{incompressivel}$ ao longo do duto'], loc=3)
-
-
-plt.show()
-plt.close('all')
-
-
+logging.warning('pressure from single phase EDO system' + str(p))
 
 
 '''
 ===============&&&&&&&&&&&&&&&&&&&===========++++++++++++++===================
 '''
-# sys.exit(0)
+sys.exit(0)
 
 twoPhase_models = {'density':density_models['_jpDias'], 'viscosity':viscosity_models['_NISSAN'],
           'friction':friction_models['_Colebrook'],
@@ -477,8 +373,8 @@ def systemEDO2Phase(uph, l, incrl, twoPhaseFixedParameters, twoPhase_models):
         if cont == 0:
             T = T_e
         else:
-            if q > 1.0: T -= 1e-4
-            elif q < 0.0: T += 1e-4
+            if q >= 1.0: T -= 1e-4
+            elif q <= 0.0: T += 1e-4
             else: T -= 1e-5
         q, is_stable, K_values_newton, initial_K_values = flash(p, T, pC, Tc, AcF, z)
         x = z / (q * (K_values_newton - 1.) + 1.)
@@ -486,55 +382,71 @@ def systemEDO2Phase(uph, l, incrl, twoPhaseFixedParameters, twoPhase_models):
         _F_V, hELV, _sELV = hsFv_obj(p, T, z)
         objT = np.abs(hELV - h)
         cont += 1
-
-
-        # spcvolL = FlowTools_obj.specificVolumeLiquid_Wrap(p, T, MM, z, z_mass, twoPhase_models['density'])
-        # spcvolG = FlowTools_obj.specificVolumGas(p, T, MM, y)
-        # spcvol2Phase = FlowTools_obj.specificVolumeTwoPhase(q, spcvolG, spcvolL)
-        # M_V = prop_obj.calculate_weight_molar_mixture(MM, y, 'vapor')
-        # M_L = prop_obj.calculate_weight_molar_mixture(MM, x, 'liquid')
-        # q_mass = np.reciprocal((M_L / M_V) * (1 / q - 1.) + 1.)
-        # x_mass = Tools_Convert.convert_molarfrac_TO_massfrac(MM, x)
-        # y_mass = Tools_Convert.convert_molarfrac_TO_massfrac(MM, y)
-
-
-
-
+    x_mass = Tools_Convert.convert_molarfrac_TO_massfrac(MM, x)
 
 
     # area average
     dl = 1e-5
-    avrg_A = (Area(l) + Area(l + dl)) / 2.  # Be careful! 1e-5 it's the same value used to 'h' in dfdx
+    avrg_A = (Area(l) + Area(l + dl)) / 2.
     dAdl = derivative(Area, l, dl)
 
-    # calculating beta
-    def spcvolL_function_only_of_T(T):
+    # calculating compressibility
+    def specvol2Phase_function_only_p(p):
         '''
-        This function has been created to force specific volume to be a function of temperature only \n
-        It was necessary because beta depends on derivative of specific volume by temperature\n
+        This function has been created to force specific volume to be a function of pressure only \n
+        It was necessary because compressibility depends on derivative of specific volume by pressure\n
 
-        Return: specificVolumeLiquid = f(T)
+        Return: specificVolume2Phase = f(p)
         '''
-        return FlowTools_obj.specificVolumeLiquid_Wrap(p, T, MM, z, z_mass, twoPhase_models['density'])
+        spcvolL = FlowTools_obj.specificVolumeLiquid_Wrap(p, T, MM, x, x_mass, twoPhase_models['density'])
+        spcvolG = FlowTools_obj.specificVolumGas(p, T, MM, y)
+        spcvol2Phase = FlowTools_obj.specificVolumeTwoPhase(q, spcvolG, spcvolL)
+        return spcvol2Phase
 
-    dT = 1e-5
-    avrg_SpcvolL = (spcvolL_function_only_of_T(T) + spcvolL_function_only_of_T(
-        T + dT)) / 2.  # Be careful! 1e-5 it's the same value used to 'h' in dfdx
-    dspcvolLdT = derivative(spcvolL_function_only_of_T, T, dT)
-    beta = np.power(avrg_SpcvolL, -1) * dspcvolLdT
+    dp = 1e-5
+    avrg_p_specvol2Phase = (specvol2Phase_function_only_p(p) + specvol2Phase_function_only_p(
+        p + dp)) / 2.
+    dspcvol2Phasedp = derivative(specvol2Phase_function_only_p, p, dp)
+    compressibility = np.power(avrg_p_specvol2Phase, -1) * dspcvol2Phasedp
+
+    # calculating compressibility
+    def spcvol2Phase_function_only_h(T):
+        '''
+        This function has been created to force specific volume to be a function of enthalpy only \n
+        It was necessary because compressibility depends on derivative of specific volume by enthalpy\n
+
+        Return: specificVolume2Phase = f(h)
+        '''
+        spcvolL = FlowTools_obj.specificVolumeLiquid_Wrap(p, T, MM, x, x_mass, twoPhase_models['density'])
+        spcvolG = FlowTools_obj.specificVolumGas(p, T, MM, y)
+        spcvol2Phase = FlowTools_obj.specificVolumeTwoPhase(q, spcvolG, spcvolL)
+        return spcvol2Phase
+
+    dh = 1e-5
+    avrg_h_specvol2Phase = (spcvol2Phase_function_only_h(T) + spcvol2Phase_function_only_h(
+        T + dh)) / 2.  # Be careful! 1e-5 it's the same value used to 'h' in dfdx
+    dspcvol2Phasedh = derivative(spcvol2Phase_function_only_h, T, dh)
+    dvdh = np.power(avrg_h_specvol2Phase, -1) * dspcvol2Phasedh
+
+
+    # two phase multiplier
+    viscL = FlowTools_obj.viscosityLiquid_Wrap(p, T, x, x_mass, twoPhase_models['viscosity'])
+    spcvolL = FlowTools_obj.specificVolumeLiquid_Wrap(p, T, MM, x, x_mass, twoPhase_models['density'])
+    spcvolG = FlowTools_obj.specificVolumGas(p, T, MM, y)
+    spcvol2Phase = FlowTools_obj.specificVolumeTwoPhase(q, spcvolG, spcvolL)
+    visc2Phase = FlowTools_obj.viscosityTwoPhase(q, spcvolG, spcvol2Phase, viscL,twoPhase_models['viscosity'])
+    phiLO2 = FlowTools_obj.twoPhaseMultiplier(q, visc2Phase, viscL, spcvolG, spcvolL)
 
     # friction factor
-    viscL = FlowTools_obj.viscosityLiquid_Wrap(p, T, z, z_mass, twoPhase_models['viscosity'])
     Re_mon = FlowTools_obj.reynolds_function(Gt, Dc, viscL)
-    f_F = FlowTools_obj.frictionFactorFanning_Wrap(Re_mon, ks, Dc, twoPhase_models['friction'])
-    visc2Phase = FlowTools_obj.viscosityTwoPhase(q,spcvolG, spcvol2P, viscL,
-                                                 twoPhase_models['viscosity2Phase'])
+    f_FLO = FlowTools_obj.frictionFactorFanning_Wrap(Re_mon, ks, Dc, twoPhase_models['friction'])
+
     # setting the matrix coefficients
-    A11, A12, A13 = np.power(u, -1), 0., (- beta / CpL)
-    A21, A22, A23 = u, spcvolL, 0.
+    A11, A12, A13 = np.power(u, -1), - compressibility, - dvdh
+    A21, A22, A23 = u, spcvol2Phase, 0.
     A31, A32, A33 = u, 0., 1.
 
-    aux = -2.0 * Gt2 * np.power(spcvolL, 2) * (f_F / Dc)
+    aux = - spcvol2Phase * phiLO2 * (2.0 * Gt2 * spcvolL * (f_FLO / Dc))
     C1, C2, C3 = (- dAdl / avrg_A), aux, aux
 
     matrizA = np.array([[A11, A12, A13], [A21, A22, A23], [A31, A32, A33]])
@@ -550,7 +462,7 @@ l, incril = np.linspace(0, L, pointsNumber + 1, retstep=True)
 # SOLVING - INTEGRATING
 l_crit = np.array([liv, lig, lfg, lfv])
 uph_singlephase = integrate.odeint(systemEDOsinglePhase, uph_0, l,
-                                   args=(incril, fixed_parameters, models), tcrit=l_crit)
+                                   args=(incril, twoPhaseFixedParameters, twoPhase_models), tcrit=l_crit)
 # UNPACKING THE RESULTS
 u = uph_singlephase[:, 0]
 p = uph_singlephase[:, 1]
@@ -558,3 +470,107 @@ h = uph_singlephase[:, 2]
 pB_v = pB * np.ones_like(l)
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#
+# # #[9]=========================== PLOTTING =====================
+#
+# CpL = FlowTools_obj.specificLiquidHeat_jpDias(T_e, p_e, z_mass)
+# T = T_e + (h - h_e) / CpL
+#
+# index_l_150mm = find(l, 0.150)
+# # print('taking index of vector where l = 150mm', index_l_150mm)
+#
+# index_l_640mm = find(l, 0.640)
+# # print('taking index of vector where l = 640mm', index_l_640mm)
+# pinter = p[index_l_640mm]
+# hinter = h[index_l_640mm]
+# Tinter = T_e + (hinter - h_e) / CpL
+# # print('quem é meu z? ', z)
+#
+#
+# spcvolL_inter = FlowTools_obj.specificVolumeLiquid_Wrap(pinter, Tinter, MM, z, z_mass, density_models['_jpDias'])
+# densL_inter = 1. / spcvolL_inter
+# print('olha a densidade do ELV', densL_inter)
+# print('veja como é meu z = ', z, 'e também z_mass', z_mass)
+# Acinter = Area(0.640)
+# Gtinter = mdotL_e / Acinter
+# rinho = np.linspace(-D / 2, D / 2, 101)
+#
+# # q = 0.4
+# # viscF = FlowTools_obj.viscosityLiquid_Wrap(p, T, z, z_mass, 'jpDias')
+# # spcvolG = FlowTools_obj.specificVolumGas(p, T, MM, z)
+# # spcvolF = FlowTools_obj.specificVolumeLiquid_Wrap(p, T, MM, z, z_mass, density_model='jpDias')
+# # spcvol2P = FlowTools_obj.specificVolumeTwoPhase(q, spcvolG, spcvolF)
+# # visc2P = FlowTools_obj.viscosityTwoPhase(q,spcvolG, spcvol2P, viscF, visc2Phase_model='Dukler')
+# # logging.warning('viscosidade bifásica deu certo?' + str(visc2P))
+#
+# R = D / 2.
+# ur = np.zeros_like(rinho)
+# for i, r in enumerate(rinho):
+#     ur[i] = 2 * Gtinter * spcvolL_inter * (1. - (r / R) ** 2)
+#
+# # plt.figure(figsize=(7,5))
+# # plt.xlim(0.0,1.6)
+# # plt.ylim(-8.0, 8.0)
+# # plt.ylabel('r [mm]')
+# # plt.xlabel('u [m/s]')
+# # plt.plot(ur, rinho * 1e3)
+# # # plt.legend(['$u_{incompressivel}$ ao longo do duto'], loc=1)
+#
+#
+# # plt.figure(figsize=(7,5))
+# # #plt.ylim(20,120)
+# # plt.xlabel('l [m]')
+# # plt.ylabel('T [K]')
+# # plt.plot(l, T)
+# # plt.legend(['Temperatura Esc. Incompressivel'], loc=3)
+#
+#
+# # plt.figure(figsize=(7,5))
+# # #plt.xlim(0.6,0.8)
+# # plt.xlabel('l [m]')
+# # plt.ylabel('u [m/s]')
+# # plt.plot(l, u)
+# # plt.legend(['$u_{incompressivel}$ ao longo do duto'], loc=1) #loc=2 vai para canto sup esq
+#
+#
+# plt.figure(figsize=(7, 5))
+# plt.title('Grafico comparativo com pg 81 Tese Dalton')
+# plt.grid(True)
+# plt.xlabel('$l$* [m]')
+# plt.ylabel('(p - p#1) [Pascal]')
+# # plt.plot((l[(point_l150mm-1):] - 0.150), (p[(point_l150mm - 1):] - p150mm))
+# plt.plot((l[index_l_150mm:] - 0.150), (p[index_l_150mm:] - p[index_l_150mm]))
+# plt.xlim(0.0, 0.9)
+# # plt.ylim(8e5, 10e5)
+# # plt.legend(['Pressao Esc. Incompressivel'], loc=3)
+# # plt.plot(l, pB_v)
+# # plt.legend(['Pressao Esc. Incompressivel', 'Pressão Saturação'], loc=3)
+# plt.legend('Pressão Esc. Incompressível', loc=1)
+#
+# # plt.figure(figsize=(7,5))
+# # #plt.ylim(20,120)
+# # plt.xlabel('l [m]')
+# # plt.ylabel('H [J/kg]')
+# # plt.plot(l, h)
+# # plt.legend(['$h_{incompressivel}$ ao longo do duto'], loc=3)
+#
+#
+# plt.show()
+# plt.close('all')
+#
