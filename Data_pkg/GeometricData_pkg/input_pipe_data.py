@@ -13,13 +13,13 @@ def input_pipe_data_function():
     angleVenturi_in: entrance venturi angle [rad] \n
     angleVenturi_out: outlet venturi angle [rad] \n
     diameter (D): pipe diameter (except venturi) [m] \n
-    lenght (Ld): total pipe lenght [m] \n
+    lenght (L): total pipe lenght [m] \n
     rugosity (ks): pipe rugosity [m] \n
     diameterVenturiThroat (Dvt): venturi throat diameter [m] \n
-    initialVenturiCoordinate (ziv): coordinate where venturi begins [m] \n
-    initialVenturiThroatCoordinate (zig): coordinate where venturi throat begins [m] \n
-    lastVenturiThroatCoordinate (zfg): coordinate where venturi throat ends [m] \n
-    lastVenturiCoordinate (zfv): coordinate where venturi ends [m] 
+    initialVenturiCoordinate (liv): coordinate where venturi begins [m] \n
+    initialVenturiThroatCoordinate (lig): coordinate where venturi throat begins [m] \n
+    lastVenturiThroatCoordinate (lfg): coordinate where venturi throat ends [m] \n
+    lastVenturiCoordinate (lfv): coordinate where venturi ends [m]
     '''
     this_function_name = sys._getframe().f_code.co_name
     print('\n---\n DATA FLOW ', this_function_name)
@@ -44,13 +44,13 @@ def input_pipe_data_function():
 
 
 
-(angleVenturi_in, angleVenturi_out, ks, Ld, D, Dvt, ziv, zig, zfg, zfv) = input_pipe_data_function()
+(angleVenturi_in, angleVenturi_out, ks, L, D, Dvt, liv, lig, lfg, lfv) = input_pipe_data_function()
 
 
-def areaVenturiPipe_function(z):
+def areaVenturiPipe_function(l):
     ''' 
     THIS FUNCTION CALCULATES THE PIPE CROSS SECTION AREA, WHICH DEPENDS ON 
-    DUCT POSITION, i.e., Ac = Ac(z)  \n
+    DUCT POSITION, i.e., Ac = Ac(l)  \n
 
     
 
@@ -58,13 +58,13 @@ def areaVenturiPipe_function(z):
     angleVenturi_out: outlet venturi angle [rad] \n
     D: pipe diameter [m] \n
     Dvt: venturi throat diameter [m] \n
-    ziv: coordinate where venturi begins [m] \n
-    zig: coordinate where venturi throat begins [m] \n
-    zfg: coordinate where venturi throat ends [m] \n
-    zfv: coordinate where venturi ends [m] 
-    z: pipe position [m] \n 
-    rc: cross section radius, i.e., rc = rc(z) [m] \n
-    Ac: area cross section where Ac = Ac(z) [m2] \n
+    liv: coordinate where venturi begins [m] \n
+    lig: coordinate where venturi throat begins [m] \n
+    lfg: coordinate where venturi throat ends [m] \n
+    lfv: coordinate where venturi ends [m]
+    l: any pipe position [m] \n
+    rc: cross section radius, i.e., rc = rc(l) [m] \n
+    Ac: area cross section where Ac = Ac(l) [m2] \n
 
     Return: Ac
     '''
@@ -73,9 +73,9 @@ def areaVenturiPipe_function(z):
 
 
     rvt = Dvt / 2.
-    if (ziv < z < zig): rc = rvt + (zig - z) * np.tan(angleVenturi_in) 
-    elif (zig <= z <= zfg): rc = rvt 
-    elif (zfg < z < zfv): rc = rvt + (z - zfg) * np.tan(angleVenturi_out)
+    if (liv < l < lig): rc = rvt + (lig - l) * np.tan(angleVenturi_in)
+    elif (lig <= l <= lfg): rc = rvt
+    elif (lfg < l < lfv): rc = rvt + (l - lfg) * np.tan(angleVenturi_out)
     else: rc = D / 2.   
     msg = '\n==========================================================================\n'
     msg += 'If this msg pop up it\'s because the venturi\'s radius = %s was calculate \n'

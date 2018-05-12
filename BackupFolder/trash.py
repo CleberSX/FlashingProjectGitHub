@@ -115,3 +115,36 @@ print(p)
 q = p.deriv()
 print(q)
 
+'''
+=====================
+TRABALHANDO HANDLE ERRORS: retirado de Automate the Boring Stuff with Python
+=================
+'''
+# def switchLights(stoplight):
+#
+#     for key in stoplight.keys():
+#         if stoplight[key] == 'green':
+#             stoplight[key] = 'yellow'
+#         elif stoplight[key] == 'yellow':
+#             stoplight[key] = 'red'
+#         elif stoplight[key] == 'red':
+#             stoplight[key] = 'green'
+#         assert 'red' in stoplight.values(), 'Neither light is red! ' + str(stoplight)
+#
+#
+# #Dicionário
+# market_2nd = {'ns': 'green', 'ew': 'red'}
+# mission_16th = {'ns': 'red', 'ew': 'green'}
+
+# switchLights(mission_16th)
+
+
+
+allGuests = {'Alice': {'apples': 'cinco', 'pretzels': 'doze'},
+                'Bob': {'ham sandwiches': 3, 'apples': 2},
+                'Carol': {'cups': 3, 'apple pies': 1}}
+
+zz = allGuests['Alice'].get('apples', 0)
+print('valor: ', zz)
+
+print(np.abs(10. - 50.))

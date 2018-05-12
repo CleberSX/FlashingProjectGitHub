@@ -69,3 +69,16 @@ def dfdx(f, x, h=1e-5):
         Return: f'(x)
         '''
         return (f(x+h) - f(x)) / float(h)
+
+
+
+def finding_SpecificGeometricPosition(array, target):
+    '''
+    This function will looking for a specific value inside a vector \n
+    target: a specific position [same vector's unit] \n
+    E.g., in case vector position Zduct = 150mm, you must use: target = 0.150 \n
+
+    Return: index  (the index/position of the interested value in the vector)
+     '''
+    index = (np.abs(array - target)).argmin()
+    return index

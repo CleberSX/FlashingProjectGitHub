@@ -1,6 +1,7 @@
 import numpy as np 
 import sys
 from scipy import optimize
+from Thermo_pkg.ThermoTools_pkg import Tools_Convert
 from Thermo_pkg.Properties_pkg.Properties import Properties
 from CoolProp.CoolProp import PropsSI
 
@@ -29,35 +30,39 @@ class FlowTools_class(Properties):
                 '\n--------------------------------------------------------)\n '
                 % (msg))
 
-    def volumeEspecificoGas(self, p, T, MMixture):
+    def specificVolumGas(self, p, T, MM, x):
         '''
         MMixture:  mixture molar weight --> MMixture = np.eisum('i,i', x, MM) [kg/kmol]
         '''
-        return ( R * T / (p * MMixture))
+        rhoG = self.calculate_density_phase(p,T,MM,x,'vapor')
+        return 1. / rhoG
 
 
-    def volumeEspecificaBifasico(self, x, p, T, MMixture, spvolF):
+    def specificVolumeTwoPhase(self, q, spcvolG, spcvolF):
         '''
-        x: vapor quality \t
-        MMixture:  mixture molar weight 
-        spvolF: specific volume saturated liquid [m3/kg]
+        q: vapor quality \n
+
+        spcvolG: specific volume saturated vapor [m3/kg] \n
+        spcvolF: specific volume saturated liquid [m3/kg] \n
+        spcvol2P: specific volume two phase [m3/kg]
+
+        Return: spcvol2P
         '''
-        spvolG = self.volumeEspecificoGas(p, T, MMixture)
-        return ((1.-x) * spvolF + x * spvolG)
+        return ((1.-q) * spcvolF + q * spcvolG)
 
        
-    def fracaoVazio(self, x, p, T, MMixture, spvolF):
+    def voidFraction(self, q, spcvolG ,spvolTP):
         '''
-        x: vapor quality \t
-        MMixture:  mixture molar weight 
-        spvolF: specific volume saturated liquid [m3/kg]
+        q: vapor quality \n
+        MMixture:  mixture molar weight \n
+        spvolF: specific volume saturated liquid [m3/kg] \n
+
+        Return: void_fraction
         '''
-        spvolG = self.volumeEspecificoGas(p, T, MMixture)
-        spvolTP = self.volumeEspecificaBifasico(x, p, T, MMixture, spvolF)
-        return (spvolG * x / spvolTP)
+        return (spcvolG * q / spvolTP)
 
 
-    def liquidPhaseDensity_jpDias_SEC(self, T, p, xR_mass):
+    def densityLiquid_jpDias_SEC(self, T, p, x_mass):
         ''' 
         The correlation was copied from JP Dias's Thesis (pg 294, EQ A.2) \n
 
@@ -66,13 +71,13 @@ class FlowTools_class(Properties):
 
         T: temperature [K] \n
         p: pressure [Pa] \n
-        xR_mass: vector mass concentration [-] (xR_mass = ([xR_mass, xO_mass])) \n
+        x_mass: vector mass concentration [-] (x_mass = ([xR_mass, xO_mass])) \n
 
         This correlation is valid only in interval 20C < temp. celsius < 120C \n
 
         Return: densL
         '''
-        wr = xR_mass[0] 
+        wr = x_mass[0]
         Tc = T - 273.15
 
         densO = 966.43636 - 0.57391608 * Tc - 0.00024475524 * Tc ** 2
@@ -81,18 +86,17 @@ class FlowTools_class(Properties):
         return densL
 
 
-     
 
 
-    def specificVolumeLiquid_Wrap(self, p, T, MM, xR, xR_mass, density_model='jpDias'):
+    def specificVolumeLiquid_Wrap(self, p, T, MM, x, x_mass, density_model='jpDias'):
         '''
         This function chooses density from EXperimental CORrelation ('jpDias') or from THErmodynamics ('ELV') \n
 
         T: temperature [K] \n
         p: pressure [Pa] \n
         MM: vector with molar weight of each component "i" [kg/kmol], i.e., (MM = ([MMrefrig, MMpoe])) 
-        xR: vector molar concentration [-], i.e., (xR = ([xRrefrig, xOpoe])) \n
-        xR_mass: vector mass concentration [-] (xR_mass = ([xR_mass, xO_mass])) \n
+        x: vector molar concentration [-], i.e., (x = ([xR, xO])) \n
+        x_mass: vector mass concentration [-] (x_mass = ([xR_mass, xO_mass])) \n
         spvolL: specific volume from correlation 'jpDias' or from 'ELV' [m3/kg] \n
 
         Return: spvolL'''
@@ -105,13 +109,13 @@ class FlowTools_class(Properties):
             msg += '\t Choose one of the models: %s' % density_models
             raise Exception(msg)
         if density_model == 'ELV':
-            densL = super().calculate_density_phase(p, T, MM, xR, fluid_type='liquid')
+            densL = super().calculate_density_phase(p, T, MM, x, fluid_type='liquid')
         elif density_model == 'jpDias':
-            densL = self.liquidPhaseDensity_jpDias_SEC(T, p, xR_mass)
+            densL = self.densityLiquid_jpDias_SEC(T, p, x_mass)
         spvolL = np.power(densL, -1) 
         return spvolL
 
-    def liquidSpecificHeat_jpDias(self, T, p, xR_mass):
+    def specificLiquidHeat_jpDias(self, T, p, x_mass):
         ''' 
         The correlation was copied from JP Dias's Thesis (pg 295, EQ A.7) \n
 
@@ -120,7 +124,7 @@ class FlowTools_class(Properties):
 
         T: temperature [K] \n
         p: pressure [Pa] \n
-        xR_mass: vector mass concentration [-] (xR_mass = ([xR_mass, xO_mass])) \n
+        x_mass: vector mass concentration [-] (x_mass = ([xR_mass, xO_mass])) \n
 
         This correlation is valid only in interval: ? \n
         
@@ -128,7 +132,7 @@ class FlowTools_class(Properties):
         Return: cpL [J/kg K] (?...tenho verificar se são essas as unidades!!)
         '''
         Tc = T - 273.15
-        wr = xR_mass[0] 
+        wr = x_mass[0]
         
         CpR = PropsSI("Cpmass", "T", T, "P", p,"R134a")
         CpO = 2411.5968 + 2.260872 * Tc
@@ -137,7 +141,7 @@ class FlowTools_class(Properties):
     
 
 
-    def liquidViscosity_jpDias_SEC(self, T, p, xR_mass):
+    def viscosityLiquid_jpDias_SEC(self, T, p, x_mass):
 
         ''' 
         The correlation was copied from JP Dias's Thesis (pg 294, EQ A.4) \n
@@ -147,7 +151,7 @@ class FlowTools_class(Properties):
 
         T: temperature [K] \n
         p: pressure [Pa] \n
-        xR_mass: vector mass concentration [-] (xR_mass = ([xR_mass, xO_mass])) \n
+        x_mass: vector mass concentration [-] (x_mass = ([xR_mass, xO_mass])) \n
 
         This correlation is valid only in interval: \n
         0 < temp. celsius < 120C and 0.0 < refrigerant < 50.0% \n
@@ -156,7 +160,7 @@ class FlowTools_class(Properties):
         '''
 
         Tc = T - 273.15
-        wr = xR_mass[0] * 100
+        wr = x_mass[0] * 100
 
         (a1, a2) = (38.31853120, 1.0)
         (b1, b2) = (0.03581164, 0.05188487)
@@ -172,17 +176,17 @@ class FlowTools_class(Properties):
             e2 * np.power(wr, 2) + f2 * Tc * wr )
 
         viscCinem = num / den
-        densL = self.liquidPhaseDensity_jpDias_SEC(T, p, xR_mass)
+        densL = self.densityLiquid_jpDias_SEC(T, p, x_mass)
         return viscCinem * densL * 1e-6
 
 
-    def liquidViscosityNISSAN_SEC(self, T, p, xR, G12 = 3.5):
+    def viscosityLiquid_NISSAN_SEC(self, T, p, x, G12 = 3.5):
         '''
         GRUNBERG & NISSAN (1949) correlation - see Dalton Bertoldi's Thesis (page 81) \n
         Objective: necessary to determine the subcooled liquid's viscosity \n
         T: temperature [K] \n
         p: pressure [Pa] \n
-        xR: vector molar concentration ([xR, xO]) \n
+        x: vector molar concentration x = ([xR, xO]) \n
         G12: model's parameter (G12 = 3.5 has been taken from Dalton's Thesis (page 82)) \n
         Refrigerant viscosity is get from CoolProp \n
         viscO: POE ISO VG 10 viscosity [Pa.s] \n
@@ -199,12 +203,12 @@ class FlowTools_class(Properties):
         viscO = 0.04342 * np.exp(- 0.03529 * Tc)
         viscR = PropsSI("V", "T", T, "P", p,"R134a")
         logvisc = np.array([np.log(viscR),np.log(viscO)])
-        sum_xlogvisc = np.einsum('i,i', xR, logvisc)
-        xRxO_G12 = np.prod(xR) * G12
+        sum_xlogvisc = np.einsum('i,i', x, logvisc)
+        xRxO_G12 = np.prod(x) * G12
         return np.exp(sum_xlogvisc + xRxO_G12)
 
 
-    def liquidViscosity_Wrap(self, p, T, xR, xR_mass, visc_model='jpDias'):
+    def viscosityLiquid_Wrap(self, p, T, x, x_mass, visc_model='jpDias'):
         '''
         This function/method choose the fluid single phase viscosity \n
         
@@ -214,8 +218,8 @@ class FlowTools_class(Properties):
 
         T: temperature [K] \n
         p: pressure [Pa] \n
-        xR: vector molar concentration ([xR, xO]) \n
-        xR_mass: vector mass concentration [-] (xR_mass = ([xR_mass, xO_mass])) \n
+        x: vector molar concentration x = ([xR, xO]) \n
+        x_mass: vector mass concentration [-] (x_mass = ([xR_mass, xO_mass])) \n
         visc_model: 'jpDias' or 'NISSAN' \n
         viscL: liquid viscosity [Pa.s] \n
 
@@ -229,24 +233,29 @@ class FlowTools_class(Properties):
             msg += '\t Choose one of the models: %s' % visc_models
             raise Exception(msg)
         if visc_model == 'NISSAN':
-            viscL = self.liquidViscosityNISSAN_SEC(T, p, xR)
+            viscL = self.viscosityLiquid_NISSAN_SEC(T, p, x)
         elif visc_model == 'jpDias':
-            viscL = self.liquidViscosity_jpDias_SEC(T, p, xR_mass)
+            viscL = self.viscosityLiquid_jpDias_SEC(T, p, x_mass)
         return viscL
 
 
 
 
-    def reynolds_function(self, Gt, Dc, p, T, xR, xR_mass, visc_model='jpDias'):
+    def reynolds_function(self, Gt, Dc, viscL):
         '''
         This function/method calculates Reynolds number \n
         
             The liquid viscosity depend of the model you've been chosen \n
             For while, there are just two options for liquid viscosity \n
+
+        Gt: mass flux [kg/s.m2] \n
+        Dc: diameter [m] \n
+        Re: Reynolds number [-] \n
+
+        Return: Re
         '''
-        
-        viscL = self.liquidViscosity_Wrap(p, T, xR, xR_mass, visc_model)
-        return Gt * Dc / (viscL) 
+
+        return Gt * Dc / viscL
 
     
 
@@ -305,26 +314,94 @@ class FlowTools_class(Properties):
 
 
 
-    def viscosidadeBifasicaSEC(self, x, xR, p, T, MMixture, spvolF):
+    def viscosityTwoPhase(self, q, spcvolG, spcvol2P, viscF, viscG=12e-6, visc2Phase_model='McAdams'):
         '''
-        x: vapor quality [-] \t
-        xR: vector molar concentration ([xR, xO]) \t
-        alfa: void fraction [-] \t
-        MMixture:  mixture molar weight --> MMixture = np.eisum('i,i', x, MM) [kg/kmol] \t
-        spvolF: specific volume saturated liquid [m3/kg]
+        q: vapor quality [-] \n
+        viscF: liquid phase viscosity [Pa.s]
+        viscg: vapor phase viscosity [Pa.s]
+        visc2P: two-phase viscosity [Pa.s] \n
+        visc2Phase_model: models of two-phase flow (McAdams, Cicchitti, Dukler)
+
+        Return: visc2P
          '''
-        viscG = 12e-6 #valor qqer...temporário...preciso entrar com uma equação aqui
-        viscF = self.liquidViscosityNISSAN_SEC(T, p, xR)
-        alfa = self.fracaoVazio(x, p, T, MMixture, spvolF)
-        return (alfa * viscG + viscF * (1. - alfa) * (1. + 2.5 * alfa))  #Eqc 8.33, pag 213 Ghiaasiaan
+        nome_desta_funcao = sys._getframe().f_code.co_name
+
+        visc2Phase_models = ['McAdams', 'Cicchitti', 'Dukler']
+        if visc2Phase_model not in visc2Phase_models:
+            msg = 'Invalid viscosity model for the two phase flow inside the function: %s' % nome_desta_funcao
+            msg += '\t Choose one of the models: %s' % visc2Phase_models
+            raise Exception(msg)
+
+        if visc2Phase_model == 'McAdams':
+            visc2P = (q / viscG + (1. - q) / viscF) ** (-1)
+        elif visc2Phase_model == 'Cicchitti':
+            visc2P = q * viscG + (1. - q) * viscF
+        elif visc2Phase_model == 'Dukler':
+            beta = q * spcvolG / spcvol2P
+            visc2P = beta * viscG + (1. - beta) * viscF
+
+        return visc2P
 
 
-    def reynoldsBifasico(self, Gt, Dc, x, xR, p, T, MMixture, spvolF):
+    def reynoldsBifasico(self, Gt, Dc, visc2P):
         '''
-        x: vapor quality [-] \t
-        xR: vector molar concentration ([xR, xO])
-         '''
-        viscTP = self.viscosidadeBifasicaSEC(x, xR, p, T, MMixture, spvolF)
-        return (Gt * Dc / viscTP)
+        Gt: mass flux [kg/s.m2] \n
+        Dc: diameter [m] \n
+        visc2P: two-phase viscosity [Pa.s] \n
+        Re2P: two phase Reynolds [-] \n
 
-    
+        Return: Re2P
+         '''
+
+        return (Gt * Dc / visc2P)
+
+
+    def twoPhaseMultiplier(self, q, visc2P, viscL, spcvolG, spcvolL, n=-0.25):
+        '''
+        :param q: vapor quality [-]
+        visc2P: two-phase viscosity model [Pa.s] \n
+        viscL: liquid phase viscosity [P.s] \n
+        viscG: vapor phase viscosity [P.s] \n
+        spcvolG: gas phase specific volume [m3/kg] \n
+        spcvolL: liquid phase specific volume [m3/kg] \n
+        n: model parameter in two-phase multiplier (n=-0.25 when Blasius is used) \n
+
+        phiLO2: two-phase multiplier [-]
+
+        :Return: phiLO2
+        '''
+
+        phiLO2 = np.power((visc2P / viscL), n) * (1. + (spcvolG / spcvolL - 1.) * q)
+
+        return phiLO2
+
+
+
+
+
+def solution_concentration_set_function(lightComponent: object, MM: object, base: object) -> object:
+    '''
+    This function is useful to obtain mass fraction and molar fraction VECTOR of a BINARY mixture \n
+
+
+    lightComponent: the subcooled liquid solution concentration is set up ...
+                ... based on R134a concentration (e.g.: 5./100, 0.05/100, etc...) \n
+    MM: vector with molar weight of each component "i" [kg/kmol], i.e., (MM = ([MMrefrig, MMpoe])) \n
+    base: 'molar' or 'mass' [-]; you need inform one of them \n
+    z: vector concentration [-], i.e., (z = ([zR, zO])) \n
+    z_mass: vector mass concentration [-] (z_mass = ([zR_mass, zO_mass])) \n
+
+    Return: z, z_mass
+    '''
+    nome_desta_funcao = sys._getframe().f_code.co_name
+    if lightComponent > 1. or lightComponent < 0.0:
+        raise Exception('You entered with a concentration out of expected range ' + str(nome_desta_funcao))
+    elif MM.shape[0] != 2:
+        raise Exception('You entered with a float in MM; this must be a vector MM = ([MM1,MM2]) on '
+                        + str(nome_desta_funcao))
+    elif base != 'mass' and 'molar':
+        raise Exception('You need type \'mass\' or \'molar\' on ' + str(nome_desta_funcao))
+
+    zin = np.array([lightComponent, (1. - lightComponent)])
+    z, z_mass = Tools_Convert.frac_input(MM, zin, base)
+    return z, z_mass

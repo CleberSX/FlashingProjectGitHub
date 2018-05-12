@@ -3,7 +3,8 @@ import sys
 
 
 #=======================
-'Uncomment just one of them'
+'What does to do in this file input_flow_data.py? ' \
+'JUST uncomment one of the cases below'
 #=======================
 case = ('case0', 0.05/100, 0.122549, 36.5, 8.92)  
 # case = ('case1', 16.1/100, 0.122811, 36.7, 4.79)

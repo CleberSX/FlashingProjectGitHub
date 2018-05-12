@@ -9,7 +9,7 @@ PONTOS QUE DEVEMOS ALIMENTAR/ALTERAR:
 import logging
 import numpy as np
 from scipy.optimize import newton, fsolve, root, brentq, brenth, brent, brute, fmin
-from Wilson import calculate_K_values_wilson
+from Thermo_pkg.Bubble_pkg.Wilson import calculate_K_values_wilson
 from Thermo_pkg.EOS_pkg.EOS_PengRobinson import PengRobinsonEos
 from Thermo_pkg.Flash_pkg.Michelsen import Michelsen
 from Data_pkg.PhysicalChemistryData_pkg.InputData___ReadThisFile import props
