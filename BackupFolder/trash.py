@@ -148,3 +148,14 @@ zz = allGuests['Alice'].get('apples', 0)
 print('valor: ', zz)
 
 print(np.abs(10. - 50.))
+
+
+from scipy.integrate import solve_ivp
+def upward_cannon(t, y): return [y[1], -0.5]
+def hit_ground(t, y): return y[1]
+hit_ground.terminal = True
+hit_ground.direction = -1
+sol = solve_ivp(upward_cannon, [0, 100], [0, 30], events=hit_ground)
+print(sol.t_events)
+print(sol.t)
+print('solucao', sol.y[0])

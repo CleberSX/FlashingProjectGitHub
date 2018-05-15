@@ -2,7 +2,7 @@
 import logging, sys
 #Math tools
 import numpy as np
-from scipy import integrate, optimize
+from scipy.integrate import odeint, solve_ivp
 from scipy.misc import derivative
 import matplotlib.pyplot as plt
 from MathTools_pkg.MathTools import finding_SpecificGeometricPosition as find
@@ -243,9 +243,9 @@ uph_0 = [u_e, p_e, h_e]
 #packing the parameters to get in systemEDOsinglePhase()
 singlePhaseModels = {'density':density_models['_jpDias'], 'viscosity':viscosity_models['_NISSAN'],
           'friction':friction_models['_Colebrook']}
-singlePhaseFixedParameters = (mdotL_e, h_e, T_e, z, z_mass, ks)
+
 #ODE system
-def systemEDOsinglePhase(uph, l, incrl, singlePhaseFixedParameters, singlePhaseModels):
+def edo_sp(l, uph):
     '''
     Target: resolver um sistema de EDO's em z para u, p e h com linalg.solve; \t
         [1] - Input: \n
@@ -268,12 +268,7 @@ def systemEDOsinglePhase(uph, l, incrl, singlePhaseFixedParameters, singlePhaseM
     ''''''
     # unpack
     u, p, h = uph
-    (mdotL_e, h_e, T_e, z, z_mass, ks) = singlePhaseFixedParameters
 
-    if p > pB:
-        logging.warning('thats ok until now' + str(p))
-    elif p <= pB:
-        logging.warning('the code will crash because much lower pressure' + str(p))
     # calculating CpL, radius, Gt, area
     CpL = FlowTools_obj.specificLiquidHeat_jpDias(T_e, p, z_mass)
     T = T_e + (h - h_e) / CpL
@@ -323,20 +318,28 @@ def systemEDOsinglePhase(uph, l, incrl, singlePhaseFixedParameters, singlePhaseM
     dudl, dpdl, dhdl = np.linalg.solve(matrizA, RHS_C)
 
     return [dudl, dpdl, dhdl]
-# CREATING VECTORS POINTS
-pointsNumber = 1000
-l, incril = np.linspace(0, L, pointsNumber + 1, retstep=True)
-# SOLVING - INTEGRATING
-l_crit = np.array([liv, lig, lfg, lfv])
-uph_singlephase = integrate.odeint(systemEDOsinglePhase, uph_0, l,
-                    args=(incril, singlePhaseFixedParameters, singlePhaseModels), tcrit = l_crit)
-# UNPACKING THE RESULTS 
-u = uph_singlephase[:,0]
-p = uph_singlephase[:,1]
-h = uph_singlephase[:,2]
-pB_v = pB * np.ones_like(l)
 
-logging.warning('pressure from single phase EDO system' + str(p))
+def hit_sat(l, uph): return (uph[1] - pB)
+
+def main():
+    pointsNumber = 1000
+    l, incril = np.linspace(0, L, pointsNumber + 1, retstep=True)
+    # l_crit = np.array([liv, lig, lfg, lfv])
+    hit_sat.terminal = True
+    hit_sat.direction = 0
+    return solve_ivp(edo_sp, [0.0, L], [u_e, p_e, h_e], max_step=incril, events=hit_sat)
+
+
+# UNPACKING THE RESULTS
+uph_sp = main()
+u = uph_sp.y[0,:]
+p = uph_sp.y[1,:]
+h = uph_sp.y[2,:]
+pB_v = pB * np.ones_like(u)
+print(uph_sp.t_events)
+print('essa eh a velocidade', u)
+
+
 
 
 '''
@@ -350,7 +353,7 @@ twoPhase_models = {'density':density_models['_jpDias'], 'viscosity':viscosity_mo
 twoPhaseFixedParameters = (mdotL_e, h_e, T_e, z, z_mass, ks)
 
 # ODE system for Two Phase Flow
-def systemEDO2Phase(uph, l, incrl, twoPhaseFixedParameters, twoPhase_models):
+def edo_2p(uph, l, incrl, twoPhaseFixedParameters, twoPhase_models):
 
     ''''''
     # unpack
@@ -461,8 +464,7 @@ pointsNumber = 1000
 l, incril = np.linspace(0, L, pointsNumber + 1, retstep=True)
 # SOLVING - INTEGRATING
 l_crit = np.array([liv, lig, lfg, lfv])
-uph_singlephase = integrate.odeint(systemEDOsinglePhase, uph_0, l,
-                                   args=(incril, twoPhaseFixedParameters, twoPhase_models), tcrit=l_crit)
+uph_singlephase = odeint(edo_2p, uph_0, l, args=(incril, twoPhaseFixedParameters, twoPhase_models), tcrit=l_crit)
 # UNPACKING THE RESULTS
 u = uph_singlephase[:, 0]
 p = uph_singlephase[:, 1]
