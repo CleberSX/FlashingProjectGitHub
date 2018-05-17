@@ -4,6 +4,7 @@ import logging, sys
 import numpy as np
 from scipy.integrate import odeint, solve_ivp
 from scipy.misc import derivative
+from scipy.optimize import root, brentq, bisect
 import matplotlib.pyplot as plt
 from MathTools_pkg.MathTools import finding_SpecificGeometricPosition as find
 #Therm utilities
@@ -45,7 +46,7 @@ logging.basicConfig(setLevel=meu_nivel_de_logging, format=' %(asctime)s - %(leve
 #logging.basicConfig(filename='Cleber_file.txt', level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
 #=============
 #[3] DISABEL: just uncomment the line below
-logging.disable(logging.WARNING)
+# logging.disable(logging.WARNING)
 
 
 
@@ -122,6 +123,7 @@ R = 8314.34                         # J / (kmol K)
 [4] - DUCT DATA is from input_pipe_data_function() (finle input_pipe_data_function.py)
 =================================================================================
 '''
+#Global variables
 (pC, Tc, AcF, MM, omega_a, omega_b, kij, Cp) = props
 (TR, hR_mass, sR_mass) = input_reference_values_function()
 (p_e, T_e, mdotL_e, fmR134a) = FlowData() # <=============================== change here
@@ -154,10 +156,11 @@ eos_obj = PengRobinsonEos(pC, Tc, AcF, omega_a, omega_b, kij)
 GETTING MOLAR AND MASS VECTOR CONCENTRATION
 =================================================================================================================
 '''
+
 try:
     z, z_mass = conc(fmR134a, MM, 'mass')
 except Exception as err:
-    print('Error raised on => ' + str(err))
+    print('Error when try to build concentration z and z_mass  => ' + str(err))
 
 
 '''
@@ -170,14 +173,11 @@ def saturationPressure_ResidualProperties_MolarMixture_function():
     Callling some thermodynamics variables \n
     All of them are objects 
     '''
-    hR = hR_mass * prop_obj.calculate_weight_molar_mixture(MM, z, 'saturated_liquid')
-    sR = sR_mass * prop_obj.calculate_weight_molar_mixture(MM, z, 'saturated_liquid')
-    # pG = 1.2 * bubble_obj.pressure_guess(T_e, z)
-    pB, _y, _Sy, _counter = bubble_obj(T_e, z)
+    MMixture = prop_obj.calculate_weight_molar_mixture(MM, z, "saturated_liquid")
+    hR = hR_mass * MMixture
+    sR = sR_mass * MMixture
     pB = bubble_obj(T_e, z)[0]
-    # print('Bubble pressure', pB)
-    # y_mass = Tools_Convert.convert_molarfrac_TO_massfrac(MM, y)
-    MMixture = prop_obj.calculate_weight_molar_mixture(MM, z,"liquid")
+
     return (hR, sR, pB, MMixture)
 
 (hR, sR, pB, MMixture) = saturationPressure_ResidualProperties_MolarMixture_function()
@@ -224,19 +224,20 @@ BUILDING INITIAL VALUES
 =================================================================================================================
 '''
 
-def initialValues_function():
+def initial_values():
     '''
-    Necessary set initial values to get in Odeint numerical method \n
+    Necessary set initial values to get in solve_ivp numerical method \n
     Return: u_e, p_e, h_e
     '''
     Ac_e = Area(0.0) 
     spcvolL_e = FlowTools_obj.specificVolumeLiquid_Wrap(p_e, T_e, MM, z, z_mass, density_models['_jpDias'])
     u_e = (mdotL_e * spcvolL_e) / Ac_e                  # Para obter u_e (subcooled liquid)
-    _F_V, h_e, _s_e = hsFv_obj(p_e, T_e, z)            #Para obter h_e (subcooled liquid, so F_V = 0)
+    _F_V, h_e, _s = hsFv_obj(p_e, T_e, z)            #Para obter h_e (subcooled liquid, so F_V = 0)
+    logging.warning('h (J/kgK = ' + str(h_e))
     return (u_e, p_e, h_e)
 
-(u_e, p_e, h_e) = initialValues_function()
-uph_0 = [u_e, p_e, h_e]
+(u_e, p_e, h_e) = initial_values()
+
 
 
 #[6]============================ MAIN - CODE =========================================
@@ -247,7 +248,7 @@ singlePhaseModels = {'density':density_models['_jpDias'], 'viscosity':viscosity_
 #ODE system
 def edo_sp(l, uph):
     '''
-    Target: resolver um sistema de EDO's em z para u, p e h com linalg.solve; \t
+    Target: resolver um sistema de EDO's em l para u, p e h com linalg.solve; \n
         [1] - Input: \n
             [1.a] vetor comprimento circuito (l) \n
             [1.b] vazão mássica líquido subresfriado entrada (mdotL_e) \n
@@ -260,10 +261,10 @@ def edo_sp(l, uph):
             [1.i] vetor calor específico (Cp = ([CpR, CpO])) \n
             [1.j] vetor concentração molar entrada duto (  z = ([zR, zO])  ) \n
             [1.l] vetor concentração massica entrada duto (  z_mass = ([zR_mass, zO_mass])  ) \n
-            [1.m] incremento/passo no comprimento l do duto (incl); saída adicional do np.linspace \n
+            [1.m] incremento/passo no comprimento l do duto (incril); saída adicional do np.linspace \n
             [1.n] uma lista com parâmetros do escoamento (flow_list) \n
             [1.o] uma lista com os parametros geométricos do circuito escoamento (geometric_list) \n
-        [2] - Return: [du/dl, dp/dl, dh/dl]
+        [2] - Return: (du/dl, dp/dl, dh/dl)
     '''
     ''''''
     # unpack
@@ -317,27 +318,31 @@ def edo_sp(l, uph):
     RHS_C = np.array([C1, C2, C3])
     dudl, dpdl, dhdl = np.linalg.solve(matrizA, RHS_C)
 
-    return [dudl, dpdl, dhdl]
+    return (dudl, dpdl, dhdl)
 
-def hit_sat(l, uph): return (uph[1] - pB)
+def saturation_point_met(l, uph): return (uph[1] - 0.98 * pB)
 
 def main():
     pointsNumber = 1000
     l, incril = np.linspace(0, L, pointsNumber + 1, retstep=True)
     # l_crit = np.array([liv, lig, lfg, lfv])
-    hit_sat.terminal = True
-    hit_sat.direction = 0
-    return solve_ivp(edo_sp, [0.0, L], [u_e, p_e, h_e], max_step=incril, events=hit_sat)
+    saturation_point_met.terminal = True
+    saturation_point_met.direction = 0
+    return solve_ivp(edo_sp, [0.0, L], [u_e, p_e, h_e], max_step=incril, events=saturation_point_met)
 
 
 # UNPACKING THE RESULTS
 uph_sp = main()
-u = uph_sp.y[0,:]
-p = uph_sp.y[1,:]
-h = uph_sp.y[2,:]
-pB_v = pB * np.ones_like(u)
-print(uph_sp.t_events)
-print('essa eh a velocidade', u)
+u_sp = uph_sp.y[0,:]
+p_sp = uph_sp.y[1,:]
+h_sp = uph_sp.y[2,:]
+l_sp = uph_sp.t
+pB_v = pB * np.ones_like(u_sp)
+
+CpL = FlowTools_obj.specificLiquidHeat_jpDias(T_e, p_sp[-1], z_mass)
+T_sp = T_e + (h_sp[-1] - h_e) / CpL
+logging.warning('temperatura saida do sp T_sp = ' + str(T_sp))
+logging.warning('temperatura entrada duto T_e = ' + str(T_e))
 
 
 
@@ -345,46 +350,75 @@ print('essa eh a velocidade', u)
 '''
 ===============&&&&&&&&&&&&&&&&&&&===========++++++++++++++===================
 '''
-sys.exit(0)
+# sys.exit(0)
 
 twoPhase_models = {'density':density_models['_jpDias'], 'viscosity':viscosity_models['_NISSAN'],
           'friction':friction_models['_Colebrook'],
                  'viscosity2Phase':viscosity_2Phase_models['_McAdams']}
-twoPhaseFixedParameters = (mdotL_e, h_e, T_e, z, z_mass, ks)
 
 # ODE system for Two Phase Flow
-def edo_2p(uph, l, incrl, twoPhaseFixedParameters, twoPhase_models):
+def edo_2p(l, uph):
 
     ''''''
     # unpack
     u, p, h = uph
-    (mdotL_e, h_e, T_e, z, z_mass, ks) = twoPhaseFixedParameters
-    # calculating CpL, radius, Gt, area
-    CpL = FlowTools_obj.specificLiquidHeat_jpDias(T_e, p, z_mass)
-    T = T_e + (h - h_e) / CpL
+
     Ac = Area(l)
     rc = np.sqrt(Ac / np.pi)
     Dc = 2. * rc
     Gt = mdotL_e / Ac
     Gt2 = np.power(Gt, 2)
 
-    cont, tolerance = 0, 1e-4
-    objT = 10 * tolerance
+    # cont, tolerance = 0, 8e-1
+    # objT = 10 * tolerance
+    # q, is_stable, K_values_newton, initial_K_values = flash(p, T_sp, pC, Tc, AcF, z)
+    # logging.warning('quality q = ' + str(q))
+    # logging.warning('is stable? = ' + str(is_stable))
+    # F_v, hELV, _sELV = hsFv_obj(p, T_sp, z)
+    # logging.warning('quality for hsFv_obj = ' + str(F_v))
+    # logging.warning('enthalpy ELV === ' + str(hELV))
+    # logging.warning('enthalpy EDO system ====== ' + str(h))
+    LI = 0.970 * T_sp
+    LS = 1.01 * T_sp
 
-    while objT >= tolerance or cont <= 100:
+    def find_temperature(T, p, z, h):
+        _F_v, hELV, _sELV = hsFv_obj(p, T, z)
+        return (hELV - h)
 
-        if cont == 0:
-            T = T_e
-        else:
-            if q >= 1.0: T -= 1e-4
-            elif q <= 0.0: T += 1e-4
-            else: T -= 1e-5
-        q, is_stable, K_values_newton, initial_K_values = flash(p, T, pC, Tc, AcF, z)
-        x = z / (q * (K_values_newton - 1.) + 1.)
-        y = K_values_newton * x
-        _F_V, hELV, _sELV = hsFv_obj(p, T, z)
-        objT = np.abs(hELV - h)
-        cont += 1
+
+    try:
+        T, converged = brentq(find_temperature, LI, LS, args=(p, z, h), xtol=1e-4, rtol=1e-4, full_output=True)
+        if converged is False:
+            raise Exception('Not converged' + str(converged))
+    except Exception as msg_err:
+        print('Nao esta conseguindo encontrar a raiz' + str(msg_err))
+
+    logging.warning('Temperatura = %s na Posicao = %s ' % (T,l))
+    q, is_stable, K_values_newton, initial_K_values = flash(p, T, pC, Tc, AcF, z)
+    x = z / (q * (K_values_newton - 1.) + 1.)
+    y = K_values_newton * x
+    # while objT >= tolerance or cont <= 100:
+    #
+    #     if cont == 0:
+    #         T = T_e
+    #     else:
+    #         if q >= 1.0: T -= 1e-3
+    #         elif q <= 0.0: T += 1e-3
+    #         else: T += 1e-2
+    #     q, is_stable, K_values_newton, initial_K_values = flash(p, T, pC, Tc, AcF, z)
+    #     x = z / (q * (K_values_newton - 1.) + 1.)
+    #     y = K_values_newton * x
+    #     _F_V, hELV, _sELV = hsFv_obj(p, T, z)
+    #     objT = np.abs(0.99 * hELV - h)
+    #
+    #     logging.warning('======')
+    #     logging.warning('temperatura = ' + str(T))
+    #     logging.warning('obT = ' + str(objT))
+    #     logging.warning('título q = ' + str(q))
+    #     logging.warning('======')
+    #
+    #     cont += 1
+
     x_mass = Tools_Convert.convert_molarfrac_TO_massfrac(MM, x)
 
 
@@ -437,7 +471,7 @@ def edo_2p(uph, l, incrl, twoPhaseFixedParameters, twoPhase_models):
     spcvolL = FlowTools_obj.specificVolumeLiquid_Wrap(p, T, MM, x, x_mass, twoPhase_models['density'])
     spcvolG = FlowTools_obj.specificVolumGas(p, T, MM, y)
     spcvol2Phase = FlowTools_obj.specificVolumeTwoPhase(q, spcvolG, spcvolL)
-    visc2Phase = FlowTools_obj.viscosityTwoPhase(q, spcvolG, spcvol2Phase, viscL,twoPhase_models['viscosity'])
+    visc2Phase = FlowTools_obj.viscosityTwoPhase(q, spcvolG, spcvol2Phase, viscL,twoPhase_models['viscosity2Phase'])
     phiLO2 = FlowTools_obj.twoPhaseMultiplier(q, visc2Phase, viscL, spcvolG, spcvolL)
 
     # friction factor
@@ -456,20 +490,30 @@ def edo_2p(uph, l, incrl, twoPhaseFixedParameters, twoPhase_models):
     RHS_C = np.array([C1, C2, C3])
     dudl, dpdl, dhdl = np.linalg.solve(matrizA, RHS_C)
 
-    return [dudl, dpdl, dhdl]
+    return (dudl, dpdl, dhdl)
 
 
-# CREATING VECTORS POINTS
-pointsNumber = 1000
-l, incril = np.linspace(0, L, pointsNumber + 1, retstep=True)
+#Executing two-phase
+l_sp_0 = l_sp[-1]
+u_sp_0 = u_sp[-1]
+p_sp_0 = p_sp[-1]
+h_sp_0 = h_sp[-1]
+
+def main2():
+    pointsNumber = 600
+    l, incril = np.linspace(l_sp_0, L, pointsNumber + 1, retstep=True)
+    return solve_ivp(edo_2p, [l_sp_0, L], [u_sp_0, p_sp_0, h_sp_0], max_step=incril)
+
+
+
 # SOLVING - INTEGRATING
-l_crit = np.array([liv, lig, lfg, lfv])
-uph_singlephase = odeint(edo_2p, uph_0, l, args=(incril, twoPhaseFixedParameters, twoPhase_models), tcrit=l_crit)
+
+uph_tp = main2()
 # UNPACKING THE RESULTS
-u = uph_singlephase[:, 0]
-p = uph_singlephase[:, 1]
-h = uph_singlephase[:, 2]
-pB_v = pB * np.ones_like(l)
+# u_tp = uph_tp[0,:]
+# p_tp = uph_tp[1,:]
+# h_tp = uph_tp[2,:]
+
 
 
 

@@ -314,7 +314,7 @@ class FlowTools_class(Properties):
 
 
 
-    def viscosityTwoPhase(self, q, spcvolG, spcvol2P, viscF, viscG=12e-6, visc2Phase_model='McAdams'):
+    def viscosityTwoPhase(self, q, spcvolG, spcvol2P, viscF, visc2Phase_model, viscG=12e-6):
         '''
         q: vapor quality [-] \n
         viscF: liquid phase viscosity [Pa.s]
@@ -395,12 +395,12 @@ def solution_concentration_set_function(lightComponent: object, MM: object, base
     '''
     nome_desta_funcao = sys._getframe().f_code.co_name
     if lightComponent > 1. or lightComponent < 0.0:
-        raise Exception('You entered with a concentration out of expected range ' + str(nome_desta_funcao))
+        raise Exception('You entered with a concentration out of expected range whe you calls the function ' + str(nome_desta_funcao))
     elif MM.shape[0] != 2:
-        raise Exception('You entered with a float in MM; this must be a vector MM = ([MM1,MM2]) on '
+        raise Exception('You must entered a vector like MM = ([MM1,MM2]) when you calls the function '
                         + str(nome_desta_funcao))
     elif base != 'mass' and 'molar':
-        raise Exception('You need type \'mass\' or \'molar\' on ' + str(nome_desta_funcao))
+        raise Exception('You need type \'mass\' or \'molar\' when calls the function: ' + str(nome_desta_funcao))
 
     zin = np.array([lightComponent, (1. - lightComponent)])
     z, z_mass = Tools_Convert.frac_input(MM, zin, base)
