@@ -38,20 +38,20 @@ class FlowTools_class(Properties):
         return 1. / rhoG
 
 
-    def specificVolumeTwoPhase(self, q, spcvolG, spcvolF):
+    def specificVolumeTwoPhase(self, q, volG, volF):
         '''
         q: vapor quality \n
 
-        spcvolG: specific volume saturated vapor [m3/kg] \n
-        spcvolF: specific volume saturated liquid [m3/kg] \n
-        spcvol2P: specific volume two phase [m3/kg]
+        volG: specific volume saturated vapor [m3/kg] \n
+        volF: specific volume saturated liquid [m3/kg] \n
+        volTP: specific volume two phase [m3/kg]
 
-        Return: spcvol2P
+        Return: volTP
         '''
-        return ((1.-q) * spcvolF + q * spcvolG)
+        return ((1.-q) * volF + q * volG)
 
        
-    def voidFraction(self, q, spcvolG ,spvolTP):
+    def voidFraction(self, q, volG ,spvolTP):
         '''
         q: vapor quality \n
         MMixture:  mixture molar weight \n
@@ -59,7 +59,7 @@ class FlowTools_class(Properties):
 
         Return: void_fraction
         '''
-        return (spcvolG * q / spvolTP)
+        return (volG * q / spvolTP)
 
 
     def densityLiquid_jpDias_SEC(self, T, p, x_mass):
@@ -88,7 +88,7 @@ class FlowTools_class(Properties):
 
 
 
-    def specificVolumeLiquid_Wrap(self, p, T, MM, x, x_mass, density_model='jpDias'):
+    def specificVolumeLiquid_Wrap(self, p, T, MM, x, density_model='jpDias'):
         '''
         This function chooses density from EXperimental CORrelation ('jpDias') or from THErmodynamics ('ELV') \n
 
@@ -102,7 +102,7 @@ class FlowTools_class(Properties):
         Return: spvolL'''
 
         nome_desta_funcao = sys._getframe().f_code.co_name
-
+        x_mass = Tools_Convert.convert_molarfrac_TO_massfrac(MM, x)
         density_models = ['ELV', 'jpDias']
         if density_model not in density_models:
             msg = 'Invalid density model in --> %s' % nome_desta_funcao
@@ -314,56 +314,56 @@ class FlowTools_class(Properties):
 
 
 
-    def viscosityTwoPhase(self, q, spcvolG, spcvol2P, viscF, visc2Phase_model, viscG=12e-6):
+    def viscosityTwoPhase(self, q, volG, volTP, viscF, viscTP_model, viscG=12e-6):
         '''
         q: vapor quality [-] \n
         viscF: liquid phase viscosity [Pa.s]
         viscg: vapor phase viscosity [Pa.s]
-        visc2P: two-phase viscosity [Pa.s] \n
-        visc2Phase_model: models of two-phase flow (McAdams, Cicchitti, Dukler)
+        viscTP: two-phase viscosity [Pa.s] \n
+        viscTP_model: models of two-phase flow (McAdams, Cicchitti, Dukler)
 
-        Return: visc2P
+        Return: viscTP
          '''
         nome_desta_funcao = sys._getframe().f_code.co_name
 
-        visc2Phase_models = ['McAdams', 'Cicchitti', 'Dukler']
-        if visc2Phase_model not in visc2Phase_models:
+        viscTP_models = ['McAdams', 'Cicchitti', 'Dukler']
+        if viscTP_model not in viscTP_models:
             msg = 'Invalid viscosity model for the two phase flow inside the function: %s' % nome_desta_funcao
-            msg += '\t Choose one of the models: %s' % visc2Phase_models
+            msg += '\t Choose one of the models: %s' % viscTP_models
             raise Exception(msg)
 
-        if visc2Phase_model == 'McAdams':
-            visc2P = (q / viscG + (1. - q) / viscF) ** (-1)
-        elif visc2Phase_model == 'Cicchitti':
-            visc2P = q * viscG + (1. - q) * viscF
-        elif visc2Phase_model == 'Dukler':
-            beta = q * spcvolG / spcvol2P
-            visc2P = beta * viscG + (1. - beta) * viscF
+        if viscTP_model == 'McAdams':
+            viscTP = (q / viscG + (1. - q) / viscF) ** (-1)
+        elif viscTP_model == 'Cicchitti':
+            viscTP = q * viscG + (1. - q) * viscF
+        elif viscTP_model == 'Dukler':
+            beta = q * volG / volTP
+            viscTP = beta * viscG + (1. - beta) * viscF
 
-        return visc2P
+        return viscTP
 
 
-    def reynoldsBifasico(self, Gt, Dc, visc2P):
+    def reynoldsBifasico(self, Gt, Dc, viscTP):
         '''
         Gt: mass flux [kg/s.m2] \n
         Dc: diameter [m] \n
-        visc2P: two-phase viscosity [Pa.s] \n
-        Re2P: two phase Reynolds [-] \n
+        viscTP: two-phase viscosity [Pa.s] \n
+        ReTP: two phase Reynolds [-] \n
 
-        Return: Re2P
+        Return: ReTP
          '''
 
-        return (Gt * Dc / visc2P)
+        return (Gt * Dc / viscTP)
 
 
-    def twoPhaseMultiplier(self, q, visc2P, viscL, spcvolG, spcvolL, n=-0.25):
+    def twoPhaseMultiplier(self, q, viscTP, viscL, volG, volL, n=-0.25):
         '''
         :param q: vapor quality [-]
-        visc2P: two-phase viscosity model [Pa.s] \n
+        viscTP: two-phase viscosity model [Pa.s] \n
         viscL: liquid phase viscosity [P.s] \n
         viscG: vapor phase viscosity [P.s] \n
-        spcvolG: gas phase specific volume [m3/kg] \n
-        spcvolL: liquid phase specific volume [m3/kg] \n
+        volG: gas phase specific volume [m3/kg] \n
+        volL: liquid phase specific volume [m3/kg] \n
         n: model parameter in two-phase multiplier (n=-0.25 when Blasius is used) \n
 
         phiLO2: two-phase multiplier [-]
@@ -371,7 +371,7 @@ class FlowTools_class(Properties):
         :Return: phiLO2
         '''
 
-        phiLO2 = np.power((visc2P / viscL), n) * (1. + (spcvolG / spcvolL - 1.) * q)
+        phiLO2 = np.power((viscTP / viscL), n) * (1. + (volG / volL - 1.) * q)
 
         return phiLO2
 
