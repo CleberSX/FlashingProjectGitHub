@@ -89,7 +89,6 @@ def areaVenturiPipe_function(l):
     return Ac
 
 
-        
 
 
 

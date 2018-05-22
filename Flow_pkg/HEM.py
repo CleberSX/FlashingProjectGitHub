@@ -4,7 +4,8 @@ import logging, sys
 import numpy as np
 from scipy.integrate import odeint, solve_ivp
 from scipy.misc import derivative
-from scipy.optimize import root, brentq, bisect
+from scipy.optimize import root, brentq, bisect, ridder
+from mpmath import findroot
 import matplotlib.pyplot as plt
 from MathTools_pkg.MathTools import finding_SpecificGeometricPosition as find
 #Therm utilities
@@ -159,6 +160,7 @@ GETTING MOLAR AND MASS VECTOR CONCENTRATION
 
 try:
     z, z_mass = conc(fmR134a, MM, 'mass')
+    #There is a call for 'err', which it was built in conc function
 except Exception as err:
     print('Error when try to build concentration z and z_mass  => ' + str(err))
 
@@ -273,7 +275,8 @@ def edo_sp(l, uph):
     # calculating CpL, radius, Gt, area
     CpL = FlowTools_obj.specificLiquidHeat_jpDias(T_e, p, z_mass)
     T = T_e + (h - h_e) / CpL
-    Ac = Area(l)
+    Ac_e = Area(0.0)
+    Ac = Ac_e #Area(0.0)
     rc = np.sqrt(Ac / np.pi)
     Dc = 2. * rc
     Gt = mdotL_e / Ac
@@ -282,11 +285,12 @@ def edo_sp(l, uph):
     
     # area average
     dl = 1e-5
-    avrg_A = (Area(l) + Area(l + dl)) / 2. # Be careful! 1e-5 it's the same value used to 'h' in dfdx
-    dAdl = derivative(Area, l, dl)
+    Ac_e = Area(0.0)
+    avrg_A = Ac_e #(AreaAc_e #(l) + A Ac_e = Area(0.0rea(l + dl)) / 2. # Be careful! 1e-5 it's the same value used to 'h' in dfdx
+    dAdl = 0.0 #derivative(Area,Ac_e # l, dl)
     
     # calculating beta
-    def volL_function_only_of_T(T, p, MM, z, density=singlePhaseModels['density']):
+    def volL_func(T, p, MM, z, density=singlePhaseModels['density']):
         '''
         This function has been created to make possible evaluate dvolLdT \n
         Where dvolLdT is the derivative of specific liquid volume with temperature \n
@@ -296,7 +300,7 @@ def edo_sp(l, uph):
         return FlowTools_obj.specificVolumeLiquid_Wrap(p, T, MM, z, density)
     dT = 1e-5
 
-    dvolLdT = derivative(volL_function_only_of_T, T, dT, args=(p, MM, z))
+    dvolLdT = derivative(volL_func, T, dT, args=(p, MM, z))
     beta = np.power(volL, -1) * dvolLdT
 
 
@@ -320,16 +324,26 @@ def edo_sp(l, uph):
     return (dudl, dpdl, dhdl)
 
 
-def saturation_point_met(l, uph): return (uph[1] - pB)
+def saturation_point_met(l, uph):
+    _u, p, h = uph
+    CpL = FlowTools_obj.specificLiquidHeat_jpDias(T_e, p, z_mass)
+    T = T_e + (h - h_e) / CpL
+
+    if (p - 0.97 * pB) < 0.0:
+        q, is_stable, K_values_newton, initial_K_values = flash(p, T, pC, Tc, AcF, z)
+        if is_stable is False: return 0.0
+        else: return 1.
+    else: return 1.
+
 
 
 def main():
-    pointsNumber = 1000
+    pointsNumber = 2000
     l, incril = np.linspace(0, L, pointsNumber + 1, retstep=True)
     # l_crit = np.array([liv, lig, lfg, lfv])
     saturation_point_met.terminal = True
     saturation_point_met.direction = 0
-    return solve_ivp(edo_sp, [0.0, L], [u_e, p_e, h_e], max_step=incril, events=saturation_point_met)
+    return solve_ivp(edo_sp, [0.0, L], [u_e, p_e, h_e], method='Radau', max_step=incril, events=saturation_point_met)
 
 
 # UNPACKING THE RESULTS
@@ -340,10 +354,10 @@ h_sp = uph_sp.y[2,:]
 l_sp = uph_sp.t
 pB_v = pB * np.ones_like(u_sp)
 
-CpL = FlowTools_obj.specificLiquidHeat_jpDias(T_e, p_sp[-1], z_mass)
-T_sp = T_e + (h_sp[-1] - h_e) / CpL
+
 logging.warning('temperatura entrada duto T_e = ' + str(T_e))
-logging.warning('temperatura saida do sp T_sp = ' + str(T_sp))
+logging.warning('flashing point = ' + str(uph_sp.t_events))
+logging.warning('última pressao = ' + str(p_sp[-1]))
 
 
 
@@ -355,7 +369,7 @@ logging.warning('temperatura saida do sp T_sp = ' + str(T_sp))
 
 twoPhase_models = {'density':density_models['_jpDias'], 'viscosity':viscosity_models['_NISSAN'],
           'friction':friction_models['_Colebrook'],
-                 'viscosityTP':viscosity_TP_models['_Cicchitti']}
+                 'viscosityTP':viscosity_TP_models['_McAdams']}
 
 # ODE system for Two Phase Flow
 def edo_2p(l, uph):
@@ -363,8 +377,8 @@ def edo_2p(l, uph):
     ''''''
     # unpack
     u, p, h = uph
-
-    Ac = Area(l)
+    Ac_e = Area(0.0)
+    Ac = Ac_e #Area(l)
     rc = np.sqrt(Ac / np.pi)
     Dc = 2. * rc
     Gt = mdotL_e / Ac
@@ -373,14 +387,15 @@ def edo_2p(l, uph):
     # ======================================================================
     #                      find(T)                                         #
     # ======================================================================
-    LI = 0.65 * T_sp
-    LS = 1.15 * T_sp
+    LI = 0.95 * T_e
+    LS = 1.05 * T_e
     def find_temperature(T, p, z, h):
         _F_v, hELV, _sELV = hsFv_obj(p, T, z)
         return (hELV - h)
 
     try:
-        T, converged = brentq(find_temperature, LI, LS, args=(p, z, h), xtol=1e-4, rtol=1e-4, full_output=True)
+        # T, converged = brentq(find_temperature, LI, LS, args=(p, z, h), xtol=1e-6, full_output=True)
+        T, converged = ridder(find_temperature, LI, LS, args=(p, z, h), xtol=1e-3, full_output=True)
         if converged is False:
             raise Exception('Not converged' + str(converged))
     except Exception as msg_err:
@@ -388,13 +403,16 @@ def edo_2p(l, uph):
 
     try:
         q, is_stable, K_values_newton, initial_K_values = flash(p, T, pC, Tc, AcF, z)
-        if q < 0.0:
-            raise Exception(' q = ' + str(q))
+        if is_stable is False:
+            x = z / (q * (K_values_newton - 1.) + 1.)
+            y = K_values_newton * x
+        else:
+            q, y, x = 0.0, np.zeros_like(z), z
+            raise Exception(' Quality q = ' + str(q))
     except Exception as new_err:
-        print('Something wrong! (q < 0.0)! Artificially q = ZERO when this takes place ' + str(new_err))
-        q = 0.0
-    x = z / (q * (K_values_newton - 1.) + 1.)
-    y = K_values_newton * x
+        print('This mixture is stable yet! (q < 0.0)! Artificially q and y are set to ZERO ' + str(new_err))
+
+
     logging.warning('(T = %s ) and (P = %s ) at l = %s ' % (T, p, l))
     logging.warning('Vapor quality = ' + str(q))
     x_mass = Tools_Convert.convert_molarfrac_TO_massfrac(MM, x)
@@ -403,8 +421,8 @@ def edo_2p(l, uph):
     #                            area derivative                           #
     # ======================================================================
     dl = 1e-5
-    avrg_A = (Area(l) + Area(l + dl)) / 2.
-    dAdl = derivative(Area, l, dl)
+    avrg_A = Ac_e #(Area(l) + Area(l + dl)) / 2.
+    dAdl = 0.0 #derivative(Area, l, dl)
     # ======================================================================
     #                      compressibility                                 #
     # ======================================================================
@@ -452,7 +470,7 @@ def edo_2p(l, uph):
         '''
         H_L = prop_obj.calculate_enthalpy(TR, T, pR, p, x, z, hR, Cp, fluid_type)
         M_L = prop_obj.calculate_weight_molar_mixture(MM, x, fluid_type)
-        hL = H_L * np.reciprocal(M_L)
+        hL = H_L / M_L
         return hL
 
     dhLdxR = derivative(hL_func, x, dx, args=(z, p, T, pR, TR, hR, Cp, MM))
@@ -461,10 +479,11 @@ def edo_2p(l, uph):
     volG = FlowTools_obj.specificVolumGas(p, T, MM, y)
     H_G = prop_obj.calculate_enthalpy(TR, T, pB, p, y, z, hR, Cp, 'saturated_vapor')
     M_V = prop_obj.calculate_weight_molar_mixture(MM, y, 'saturated_vapor')
-    hG = H_G * np.reciprocal(M_V)
+    if y.all() == 0.0: hG = 0.0
+    else: hG = H_G / M_V
     H_L = prop_obj.calculate_enthalpy(TR, T, pB, p, x, z, hR, Cp, 'saturated_liquid')
     M_L = prop_obj.calculate_weight_molar_mixture(MM, x, 'saturated_liquid')
-    hL = H_L * np.reciprocal(M_L)
+    hL = H_L / M_L
     vol_fg = volG - volL
     h_fg = hG - hL
     dvolTPdh = (vol_fg - (1. - x[0]) * dvolLdxR) / (h_fg - (1. - x[0]) * dhLdxR)
@@ -508,9 +527,9 @@ p_sp_0 = p_sp[-1]
 h_sp_0 = h_sp[-1]
 tolerance = np.array([1e-2, 1e-1, 1e-1])
 def main2():
-    pointsNumber = 500
+    pointsNumber = 700
     l, incril = np.linspace(l_sp_0, L, pointsNumber + 1, retstep=True)
-    return solve_ivp(edo_2p, [l_sp_0, L], [u_sp_0, p_sp_0, h_sp_0], method='BDF', max_step=incril, atol=tolerance)
+    return solve_ivp(edo_2p, [l_sp_0, L], [u_sp_0, p_sp_0, h_sp_0], method='Radau', max_step=incril, atol=tolerance)
 
 
 
@@ -521,11 +540,15 @@ uph_tp = main2()
 u_tp = uph_tp.y[0,:]
 p_tp = uph_tp.y[1,:]
 h_tp = uph_tp.y[2,:]
+l_tp = uph_tp.t
 
 
 
-
-
+#Preparing data to plot
+u_p = np.concatenate((u_sp, u_tp), axis=0)
+p_p = np.concatenate((p_sp, p_tp), axis=0)
+h_p = np.concatenate((h_sp, h_tp), axis=0)
+l_p = np.concatenate((l_sp, l_tp), axis=0)
 
 
 
@@ -578,14 +601,33 @@ h_tp = uph_tp.y[2,:]
 # for i, r in enumerate(rinho):
 #     ur[i] = 2 * Gtinter * volL_inter * (1. - (r / R) ** 2)
 #
-# # plt.figure(figsize=(7,5))
-# # plt.xlim(0.0,1.6)
-# # plt.ylim(-8.0, 8.0)
-# # plt.ylabel('r [mm]')
-# # plt.xlabel('u [m/s]')
-# # plt.plot(ur, rinho * 1e3)
-# # # plt.legend(['$u_{incompressivel}$ ao longo do duto'], loc=1)
+plt.figure(figsize=(7,5))
+# plt.xlim(0.0,1.6)
+# plt.ylim(-8.0, 8.0)
+plt.xlabel('l [mm]')
+plt.ylabel('u [m/s]')
+# plt.plot(ur, rinho * 1e3)
+plt.plot(l_p, u_p)
+plt.legend(['$u_{incompressivel}$ ao longo do duto'], loc=1)
 #
+#
+plt.figure(figsize=(7,5))
+# plt.xlim(0.0,1.6)
+# plt.ylim(-8.0, 8.0)
+plt.xlabel('l [mm]')
+plt.ylabel('p [Pa]')
+# plt.plot(ur, rinho * 1e3)
+plt.plot(l_p, p_p)
+plt.legend(['pressao ao longo do duto'], loc=1)
+
+plt.figure(figsize=(7,5))
+# plt.xlim(0.0,1.6)
+# plt.ylim(-8.0, 8.0)
+plt.xlabel('l [mm]')
+plt.ylabel('h [J/kgK]')
+# plt.plot(ur, rinho * 1e3)
+plt.plot(l_p, h_p)
+plt.legend(['entalpia ao longo do duto'], loc=1)
 #
 # # plt.figure(figsize=(7,5))
 # # #plt.ylim(20,120)
@@ -595,12 +637,12 @@ h_tp = uph_tp.y[2,:]
 # # plt.legend(['Temperatura Esc. Incompressivel'], loc=3)
 #
 #
-# # plt.figure(figsize=(7,5))
-# # #plt.xlim(0.6,0.8)
-# # plt.xlabel('l [m]')
-# # plt.ylabel('u [m/s]')
-# # plt.plot(l, u)
-# # plt.legend(['$u_{incompressivel}$ ao longo do duto'], loc=1) #loc=2 vai para canto sup esq
+# plt.figure(figsize=(7,5))
+# #plt.xlim(0.6,0.8)
+# plt.xlabel('l [m]')
+# plt.ylabel('u [m/s]')
+# plt.plot(l, u)
+# plt.legend(['$u_{incompressivel}$ ao longo do duto'], loc=1) #loc=2 vai para canto sup esq
 #
 #
 # plt.figure(figsize=(7, 5))
@@ -625,6 +667,6 @@ h_tp = uph_tp.y[2,:]
 # # plt.legend(['$h_{incompressivel}$ ao longo do duto'], loc=3)
 #
 #
-# plt.show()
-# plt.close('all')
+plt.show()
+plt.close('all')
 #

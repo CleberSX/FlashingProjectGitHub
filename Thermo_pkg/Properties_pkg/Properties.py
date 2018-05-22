@@ -27,6 +27,7 @@ class Properties(PengRobinsonEos):
         :x: molar fraction [-]
         :MM: molar weight each component [kg/kmol]
         '''
+
         return np.einsum('i,i', MM, x)
 
 

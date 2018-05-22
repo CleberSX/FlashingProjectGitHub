@@ -34,8 +34,12 @@ class FlowTools_class(Properties):
         '''
         MMixture:  mixture molar weight --> MMixture = np.eisum('i,i', x, MM) [kg/kmol]
         '''
+
         rhoG = self.calculate_density_phase(p,T,MM,x,'vapor')
-        return 1. / rhoG
+        if rhoG == 0.0: volG = 0.0
+        else: volG = np.power(rhoG, -1)
+
+        return volG
 
 
     def specificVolumeTwoPhase(self, q, volG, volF):
