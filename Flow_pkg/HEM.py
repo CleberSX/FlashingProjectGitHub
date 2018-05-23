@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
-import logging, sys
-#Math tools
+import logging, sys, cProfile
+# Math tools
 import numpy as np
+import pandas as pd
 from scipy.integrate import odeint, solve_ivp
 from scipy.misc import derivative
 from scipy.optimize import root, brentq, bisect, ridder
 from mpmath import findroot
 import matplotlib.pyplot as plt
 from MathTools_pkg.MathTools import finding_SpecificGeometricPosition as find
-#Therm utilities
+# Therm utilities
 from Thermo_pkg.Departure_pkg.References_Values import input_reference_values_function
 from Thermo_pkg.Bubble_pkg.BubbleP import bubble_obj
 from Thermo_pkg.Properties_pkg.Properties import Properties
@@ -16,16 +17,19 @@ from Thermo_pkg.Departure_pkg.EnthalpyEntropy import HSFv
 from Thermo_pkg.ThermoTools_pkg import Tools_Convert
 from Thermo_pkg.EOS_pkg.EOS_PengRobinson import PengRobinsonEos
 from Thermo_pkg.Flash_pkg.FlashAlgorithm_main import getting_the_results_from_FlashAlgorithm_main as flash
-#Data
+# Data
 from Data_pkg.PhysicalChemistryData_pkg.InputData___ReadThisFile import props
 from Data_pkg.FlowData_pkg.input_flow_data import input_flow_data_function as FlowData
 from Data_pkg.GeometricData_pkg.input_pipe_data import input_pipe_data_function as PipeData
 from Data_pkg.GeometricData_pkg.input_pipe_data import areaVenturiPipe_function as Area
-#Flow utilities
+# Flow utilities
 from Flow_pkg.FlowTools_file import FlowTools_class
 from Flow_pkg.FlowTools_file import solution_concentration_set_function as conc
 #Properties
 # from CoolProp.CoolProp import PropsSI
+# Find who is consuming more time
+from pycallgraph import PyCallGraph
+from pycallgraph.output import GraphvizOutput
 
 
 
@@ -127,8 +131,8 @@ R = 8314.34                         # J / (kmol K)
 #Global variables
 (pC, Tc, AcF, MM, omega_a, omega_b, kij, Cp) = props
 (TR, hR_mass, sR_mass) = input_reference_values_function()
-(p_e, T_e, mdotL_e, fmR134a) = FlowData() # <=============================== change here
-(angleVenturi_in, angleVenturi_out, ks, L, D, Dvt, liv, lig, lfg, lfv) = PipeData() # <=============================== change here
+(p_e, T_e, mdotL_e, fmR134a) = FlowData()
+(angleVenturi_in, angleVenturi_out, ks, L, D, Dvt, liv, lig, lfg, lfv) = PipeData()
 
 
 '''
@@ -160,7 +164,7 @@ GETTING MOLAR AND MASS VECTOR CONCENTRATION
 
 try:
     z, z_mass = conc(fmR134a, MM, 'mass')
-    #There is a call for 'err', which it was built in conc function
+    # There is a call for 'err', which it was built in conc function
 except Exception as err:
     print('Error when try to build concentration z and z_mass  => ' + str(err))
 
@@ -170,9 +174,11 @@ except Exception as err:
 GETTING BUBBLE PRESSURE, MOLAR MIXTURE WEIGHT and REFERENCES ENTHALPY/ENTROPY 
 =================================================================================================================
 '''
-def saturationPressure_ResidualProperties_MolarMixture_function():
+
+
+def saturationpressure_residualproperties_molarmixture_function():
     '''
-    Callling some thermodynamics variables \n
+    Calling some thermodynamics variables \n
     All of them are objects 
     '''
     MMixture = prop_obj.calculate_weight_molar_mixture(MM, z, "saturated_liquid")
@@ -181,10 +187,10 @@ def saturationPressure_ResidualProperties_MolarMixture_function():
     pB = bubble_obj(T_e, z)[0]
     pR = bubble_obj(TR, z)[0]
 
-    return (hR, sR, pB, pR, MMixture)
+    return hR, sR, pB, pR, MMixture
 
-(hR, sR, pB, pR, MMixture) = saturationPressure_ResidualProperties_MolarMixture_function()
 
+(hR, sR, pB, pR, MMixture) = saturationpressure_residualproperties_molarmixture_function()
 
 logging.warning('pB = ' + str(pB))
 
@@ -235,7 +241,7 @@ def initial_values():
     Ac_e = Area(0.0) 
     volL_e = FlowTools_obj.specificVolumeLiquid_Wrap(p_e, T_e, MM, z, density_models['_jpDias'])
     u_e = (mdotL_e * volL_e) / Ac_e                  # Para obter u_e (subcooled liquid)
-    _F_V, h_e, _s = hsFv_obj(p_e, T_e, z)            #Para obter h_e (subcooled liquid, so F_V = 0)
+    _q, h_e, _s = hsFv_obj(p_e, T_e, z)            #Para obter h_e (subcooled liquid, so F_V = 0)
     return (u_e, p_e, h_e)
 
 (u_e, p_e, h_e) = initial_values()
@@ -275,8 +281,7 @@ def edo_sp(l, uph):
     # calculating CpL, radius, Gt, area
     CpL = FlowTools_obj.specificLiquidHeat_jpDias(T_e, p, z_mass)
     T = T_e + (h - h_e) / CpL
-    Ac_e = Area(0.0)
-    Ac = Ac_e #Area(0.0)
+    Ac = Area(l)
     rc = np.sqrt(Ac / np.pi)
     Dc = 2. * rc
     Gt = mdotL_e / Ac
@@ -285,9 +290,8 @@ def edo_sp(l, uph):
     
     # area average
     dl = 1e-5
-    Ac_e = Area(0.0)
-    avrg_A = Ac_e #(AreaAc_e #(l) + A Ac_e = Area(0.0rea(l + dl)) / 2. # Be careful! 1e-5 it's the same value used to 'h' in dfdx
-    dAdl = 0.0 #derivative(Area,Ac_e # l, dl)
+    avrg_A = (Ac + Area(l + dl)) / 2.
+    dAdl = derivative(Area, l, dl)
     
     # calculating beta
     def volL_func(T, p, MM, z, density=singlePhaseModels['density']):
@@ -338,16 +342,16 @@ def saturation_point_met(l, uph):
 
 
 def main():
-    pointsNumber = 2000
-    l, incril = np.linspace(0, L, pointsNumber + 1, retstep=True)
-    # l_crit = np.array([liv, lig, lfg, lfv])
     saturation_point_met.terminal = True
     saturation_point_met.direction = 0
-    return solve_ivp(edo_sp, [0.0, L], [u_e, p_e, h_e], method='Radau', max_step=incril, events=saturation_point_met)
+    return solve_ivp(edo_sp, [0.0, L], [u_e, p_e, h_e], method='Radau', max_step=1e-2, events=saturation_point_met)
 
 
-# UNPACKING THE RESULTS
+# =====================================================================================
+# ------------------------------EXECUTING main(single-phase)--------------------------
 uph_sp = main()
+# =====================================================================================
+# UNPACKING THE RESULTS
 u_sp = uph_sp.y[0,:]
 p_sp = uph_sp.y[1,:]
 h_sp = uph_sp.y[2,:]
@@ -359,11 +363,27 @@ logging.warning('temperatura entrada duto T_e = ' + str(T_e))
 logging.warning('flashing point = ' + str(uph_sp.t_events))
 logging.warning('última pressao = ' + str(p_sp[-1]))
 
+# Single-phase results: Taking the transpose (transform to a vector column)
+l_singlephase = uph_sp.t.T
+size = l_singlephase.shape[0]
+# Forcing vector length to become two dimensional
+l_singlephase = l_singlephase.reshape((size, 1))
+# Taking the transpose
+uph_singlephase = uph_sp.y.T
+# Concatenating time with uph_sp
+tuph_singlephase = np.append(l_singlephase, uph_singlephase, axis=1)
+# Send matrix to pandas
+df_sp = pd.DataFrame(tuph_singlephase,columns=['length(m)', 'velocity(m/s)', 'pressure(Pa)', 'enthalpy(J/kgK)'])
+single_phase_case = 'single_phase'
+# r na frente é devido a problematica da barra invertida do windows
+df_sp.to_csv(r'..\Results_pkg\{}.csv'.format(single_phase_case), sep='\t', float_format='%.4f')
 
 
 
 '''
-===============&&&&&&&&&&&&&&&&&&&===========++++++++++++++===================
+==============================================================
+= NEXT WE HAVE THE MAIN SCRIPT FOR THE TWO-PHASE FLOW        =
+==============================================================
 '''
 # sys.exit(0)
 
@@ -377,8 +397,7 @@ def edo_2p(l, uph):
     ''''''
     # unpack
     u, p, h = uph
-    Ac_e = Area(0.0)
-    Ac = Ac_e #Area(l)
+    Ac = Area(l)
     rc = np.sqrt(Ac / np.pi)
     Dc = 2. * rc
     Gt = mdotL_e / Ac
@@ -389,12 +408,12 @@ def edo_2p(l, uph):
     # ======================================================================
     LI = 0.95 * T_e
     LS = 1.05 * T_e
+
     def find_temperature(T, p, z, h):
-        _F_v, hELV, _sELV = hsFv_obj(p, T, z)
-        return (hELV - h)
+        _q, helv, _s = hsFv_obj(p, T, z)
+        return helv - h
 
     try:
-        # T, converged = brentq(find_temperature, LI, LS, args=(p, z, h), xtol=1e-6, full_output=True)
         T, converged = ridder(find_temperature, LI, LS, args=(p, z, h), xtol=1e-3, full_output=True)
         if converged is False:
             raise Exception('Not converged' + str(converged))
@@ -412,17 +431,17 @@ def edo_2p(l, uph):
     except Exception as new_err:
         print('This mixture is stable yet! (q < 0.0)! Artificially q and y are set to ZERO ' + str(new_err))
 
-
     logging.warning('(T = %s ) and (P = %s ) at l = %s ' % (T, p, l))
     logging.warning('Vapor quality = ' + str(q))
+
     x_mass = Tools_Convert.convert_molarfrac_TO_massfrac(MM, x)
 
     # ======================================================================
     #                            area derivative                           #
     # ======================================================================
     dl = 1e-5
-    avrg_A = Ac_e #(Area(l) + Area(l + dl)) / 2.
-    dAdl = 0.0 #derivative(Area, l, dl)
+    avrg_A = (Ac + Area(l + dl)) / 2.
+    dAdl = derivative(Area, l, dl)
     # ======================================================================
     #                      compressibility                                 #
     # ======================================================================
@@ -445,7 +464,6 @@ def edo_2p(l, uph):
     # =====================================================================
     #            calculating dvolTPdh (eq. A.13 da Tese)                  #
     # =====================================================================
-
 
     def volL_func(x, p, T, MM, density=twoPhase_models['density']):
         '''
@@ -520,52 +538,53 @@ def edo_2p(l, uph):
     return (dudl, dpdl, dhdl)
 
 
-#Executing two-phase
+# CREATING INITIAL CONDITIONS FOR THE TWO-PHASE BASED ON SINGLE-PHASE RESULTS
 l_sp_0 = l_sp[-1]
 u_sp_0 = u_sp[-1]
 p_sp_0 = p_sp[-1]
 h_sp_0 = h_sp[-1]
 tolerance = np.array([1e-2, 1e-1, 1e-1])
+
+
 def main2():
-    pointsNumber = 700
-    l, incril = np.linspace(l_sp_0, L, pointsNumber + 1, retstep=True)
-    return solve_ivp(edo_2p, [l_sp_0, L], [u_sp_0, p_sp_0, h_sp_0], method='Radau', max_step=incril, atol=tolerance)
+    return solve_ivp(edo_2p, [l_sp_0, L], [u_sp_0, p_sp_0, h_sp_0], method='Radau', max_step=1e-2, atol=tolerance)
 
 
-
-# SOLVING - INTEGRATING
-
+# =====================================================================================
+# ------------------------------EXECUTING main(two-phase)--------------------------   =
 uph_tp = main2()
+# =====================================================================================
 # UNPACKING THE RESULTS
 u_tp = uph_tp.y[0,:]
 p_tp = uph_tp.y[1,:]
 h_tp = uph_tp.y[2,:]
 l_tp = uph_tp.t
+# PREPARING DATA TO PLOT
+u_p = np.hstack((u_sp, u_tp))
+p_p = np.hstack((p_sp, p_tp))
+h_p = np.hstack((h_sp, h_tp))
+l_p = np.hstack((l_sp, l_tp))
+
+# STACKING SP results to TP ones and taking the transpose
+uph_sp_plus_tp = (np.hstack((uph_sp.y, uph_tp.y))).T
+l_sp_plus_tp = (np.hstack((uph_sp.t, uph_tp.t))).T
+l_size = l_sp_plus_tp.shape[0]
+# Forcing vector length to become two dimensional
+l_sp_plus_tp = l_sp_plus_tp.reshape((l_size, 1))
+# Appending l_sp_plus_tp to uph_sp_plus_tp
+tuph_sp_plus_tp = np.append(l_sp_plus_tp, uph_sp_plus_tp, axis=1)
+# Send matrix to pandas
+df_sp_plus_tp = pd.DataFrame(tuph_sp_plus_tp, columns=['length(m)', 'velocity(m/s)', 'pressure(Pa)', 'enthalpy(J/kgK)'])
+entire_case = 'sp_AND_tp'
+# r na frente é devido a problematica da barra invertida do windows
+df_sp_plus_tp.to_csv(r'..\Results_pkg\{}.csv'.format(entire_case), sep='\t', float_format='%.4f')
 
 
-
-#Preparing data to plot
-u_p = np.concatenate((u_sp, u_tp), axis=0)
-p_p = np.concatenate((p_sp, p_tp), axis=0)
-h_p = np.concatenate((h_sp, h_tp), axis=0)
-l_p = np.concatenate((l_sp, l_tp), axis=0)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#
-# # #[9]=========================== PLOTTING =====================
-#
+'''
+==========================================================
+=                      PLOTTING                          =
+==========================================================
+'''
 # CpL = FlowTools_obj.specificLiquidHeat_jpDias(T_e, p_e, z_mass)
 # T = T_e + (h - h_e) / CpL
 #
@@ -670,3 +689,4 @@ plt.legend(['entalpia ao longo do duto'], loc=1)
 plt.show()
 plt.close('all')
 #
+
