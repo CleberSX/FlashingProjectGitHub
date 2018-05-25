@@ -30,21 +30,22 @@ class FlowTools_class(Properties):
                 '\n--------------------------------------------------------)\n '
                 % (msg))
 
-    def specificVolumGas(self, p, T, MM, x):
+    def specificVolumGas(self, pressure, temperature, molar_weight, molar_composition):
         '''
-        MMixture:  mixture molar weight --> MMixture = np.eisum('i,i', x, MM) [kg/kmol]
+        molar_weight: vector molar weight, i.e., molar_weight = ([MM_ref, MM_oil])
+        MMixture:  mixture molar weight --> MMixture = np.eisum('i,i', molar_composition, molar_weight) [kg/kmol]
         '''
 
-        rhoG = self.calculate_density_phase(p,T,MM,x,'vapor')
+        rhoG = self.calculate_density_phase(pressure,temperature,molar_weight,molar_composition,'vapor')
         if rhoG == 0.0: volG = 0.0
         else: volG = np.power(rhoG, -1)
 
         return volG
 
 
-    def specificVolumeTwoPhase(self, q, volG, volF):
+    def specificVolumeTwoPhase(self, quality, volG, volF):
         '''
-        q: vapor quality \n
+        quality: vapor quality \n
 
         volG: specific volume saturated vapor [m3/kg] \n
         volF: specific volume saturated liquid [m3/kg] \n
@@ -52,47 +53,48 @@ class FlowTools_class(Properties):
 
         Return: volTP
         '''
-        return ((1.-q) * volF + q * volG)
+        return ((1.-quality) * volF + quality * volG)
 
        
-    def voidFraction(self, q, volG ,spvolTP):
+    def voidFraction(self, quality, volG ,spvolTP):
         '''
-        q: vapor quality \n
+        quality: vapor quality \n
         MMixture:  mixture molar weight \n
         spvolF: specific volume saturated liquid [m3/kg] \n
 
         Return: void_fraction
         '''
-        return (volG * q / spvolTP)
+        return (volG * quality / spvolTP)
 
 
-    def densityLiquid_jpDias_SEC(self, T, p, x_mass):
+    def densityLiquid_jpDias_SEC(self, temperature, pressure, mass_composition):
         ''' 
         The correlation was copied from JP Dias's Thesis (pg 294, EQ A.2) \n
 
         ESCOAMENTO DE ÓLEO E REFRIGERANTE PELA FOLGA PISTÃO-CILINDRO DE 
         COMPRESSORES HERMÉTICOS ALTERNATIVOS (2012) - UFSC \n
 
-        T: temperature [K] \n
+        temperature: temperature [K] \n
         p: pressure [Pa] \n
-        x_mass: vector mass concentration [-] (x_mass = ([xR_mass, xO_mass])) \n
+        mass_composition: vector mass concentration [-] (mass_composition = ([xR_mass, xO_mass])) \n
 
         This correlation is valid only in interval 20C < temp. celsius < 120C \n
 
         Return: densL
         '''
+        x_mass, p, T = mass_composition, pressure, temperature
         wr = x_mass[0]
         Tc = T - 273.15
 
         densO = 966.43636 - 0.57391608 * Tc - 0.00024475524 * Tc ** 2
         densR = PropsSI("D", "T", T, "P", p,"R134a")
-        densL = densO * np.power( (1. + wr * (densO / densR - 1.) ), -1)
+        densL = 5 * densO * np.power( (1. + wr * (densO / densR - 1.) ), -1)
         return densL
 
 
 
 
-    def specificVolumeLiquid_Wrap(self, p, T, MM, x, density_model='jpDias'):
+    def specificVolumeLiquid_Wrap(self, pressure, temperature, molar_weight, molar_composition, density_model):
         '''
         This function chooses density from EXperimental CORrelation ('jpDias') or from THErmodynamics ('ELV') \n
 
@@ -104,6 +106,7 @@ class FlowTools_class(Properties):
         spvolL: specific volume from correlation 'jpDias' or from 'ELV' [m3/kg] \n
 
         Return: spvolL'''
+        p, T, MM, x = pressure, temperature, molar_weight, molar_composition
 
         nome_desta_funcao = sys._getframe().f_code.co_name
         x_mass = Tools_Convert.convert_molarfrac_TO_massfrac(MM, x)
@@ -119,7 +122,7 @@ class FlowTools_class(Properties):
         spvolL = np.power(densL, -1) 
         return spvolL
 
-    def specificLiquidHeat_jpDias(self, T, p, x_mass):
+    def specificLiquidHeat_jpDias(self, temperature, pressure, mass_composition):
         ''' 
         The correlation was copied from JP Dias's Thesis (pg 295, EQ A.7) \n
 
@@ -135,6 +138,7 @@ class FlowTools_class(Properties):
 
         Return: cpL [J/kg K] (?...tenho verificar se são essas as unidades!!)
         '''
+        T, p, x_mass = temperature, pressure, mass_composition
         Tc = T - 273.15
         wr = x_mass[0]
         
@@ -145,7 +149,7 @@ class FlowTools_class(Properties):
     
 
 
-    def viscosityLiquid_jpDias_SEC(self, T, p, x_mass):
+    def viscosityLiquid_jpDias_SEC(self, temperature, pressure, mass_composition):
 
         ''' 
         The correlation was copied from JP Dias's Thesis (pg 294, EQ A.4) \n
@@ -162,7 +166,7 @@ class FlowTools_class(Properties):
 
         Return: viscL [Pa.s]
         '''
-
+        T, p, x_mass = temperature, pressure, mass_composition
         Tc = T - 273.15
         wr = x_mass[0] * 100
 
@@ -184,7 +188,7 @@ class FlowTools_class(Properties):
         return viscCinem * densL * 1e-6
 
 
-    def viscosityLiquid_NISSAN_SEC(self, T, p, x, G12 = 3.5):
+    def viscosityLiquid_NISSAN_SEC(self, temperature, pressure, molar_composition, G12 = 3.5):
         '''
         GRUNBERG & NISSAN (1949) correlation - see Dalton Bertoldi's Thesis (page 81) \n
         Objective: necessary to determine the subcooled liquid's viscosity \n
@@ -203,6 +207,7 @@ class FlowTools_class(Properties):
         "Investigação Experimental de Escoamentos Bifásicos com mudança \n
         de fase de uma mistura binária em tubo de Venturi" \n
         '''
+        T, p, x = temperature, pressure, molar_composition
         Tc = T - 273.15
         viscO = 0.04342 * np.exp(- 0.03529 * Tc)
         viscR = PropsSI("V", "T", T, "P", p,"R134a")
@@ -212,7 +217,7 @@ class FlowTools_class(Properties):
         return np.exp(sum_xlogvisc + xRxO_G12)
 
 
-    def viscosityLiquid_Wrap(self, p, T, x, x_mass, visc_model='jpDias'):
+    def viscosityLiquid_Wrap(self, pressure, temperature, molar_composition, mass_composition, visc_model):
         '''
         This function/method choose the fluid single phase viscosity \n
         
@@ -230,6 +235,7 @@ class FlowTools_class(Properties):
         Return: viscL
         '''
         nome_desta_funcao = sys._getframe().f_code.co_name
+        p, T, x, x_mass = pressure, temperature, molar_composition, mass_composition
 
         visc_models = ['jpDias', 'NISSAN']
         if visc_model not in visc_models:
@@ -245,7 +251,7 @@ class FlowTools_class(Properties):
 
 
 
-    def reynolds_function(self, Gt, Dc, viscL):
+    def reynolds_function(self, mass_flux, tube_diameter, viscL):
         '''
         This function/method calculates Reynolds number \n
         
@@ -258,13 +264,14 @@ class FlowTools_class(Properties):
 
         Return: Re
         '''
+        Gt, Dc = mass_flux, tube_diameter
 
         return Gt * Dc / viscL
 
     
 
 
-    def frictionChurchillSEC(self, Re, ks, Dc):
+    def frictionChurchillSEC(self, reynolds_single_phase, rugosity, tube_diameter):
         '''
         Churchill equation to estimate Fanning friction factor, f_F, (pg 149, Ron Darby's book) \n
             Can be applied for all flow regimes in single phase \n
@@ -274,6 +281,8 @@ class FlowTools_class(Properties):
 
         Return: f0 (First estimative for Fanning frictions factor)
         '''
+        Re, ks, Dc = reynolds_single_phase, rugosity, tube_diameter
+
         f1 = 7. / Re
         f2 = 0.27 * ks/Dc
         a = 2.457 * np.log(1. / (f1 ** 0.9 + f2))
@@ -283,14 +292,16 @@ class FlowTools_class(Properties):
         f3 = 8. / Re
         return  2 * (f3 ** 12 + 1./(A + B) ** 1.5 ) ** (1. / 12)
 
-    def frictionColebrookSEC(self, Re, ks, Dc):  
+    def frictionColebrookSEC(self, reynolds_single_phase, rugosity, tube_diameter):
         '''This Colebrook function determines the Fanning friction factor \n
 
             In fluid mechanis Colebrook calculates Darcy factor. Here we convert it to Fanning factor \n
             For Re < 4000 Fanning factor is 16/Re (we added a IF statement for laminar flow case)  \n
 
         Return: f_F
-        '''  
+        '''
+        Re, ks, Dc = reynolds_single_phase, rugosity, tube_diameter
+
         colebrook = lambda f0: - 2. * np.log10( ks / (3.7 * Dc) + 2.51 / (Re * np.sqrt(f0)) ) - 1. / np.sqrt(f0)
         f0 = 0.25 * (np.log( (ks / Dc) / 3.7 + 5.74 / Re ** 0.9 )) ** (-2) #Fox, pg 234, EQ 8.37b
         f_D = optimize.newton(colebrook, f0)  #Darcy 
@@ -299,7 +310,7 @@ class FlowTools_class(Properties):
         return f_F
     
     
-    def frictionFactorFanning_Wrap(self, Re, ks, Dc, friction_model='Colebrook'):
+    def frictionFactorFanning_Wrap(self, Re, ks, Dc, friction_model):
         '''This is the function/method we must call to calculate Fanning friction factor'''
 
         nome_desta_funcao = sys._getframe().f_code.co_name
@@ -318,17 +329,19 @@ class FlowTools_class(Properties):
 
 
 
-    def viscosityTwoPhase(self, q, volG, volTP, viscF, viscTP_model, viscG=12e-6):
+    def viscosityTwoPhase(self, quality, volG, volTP, viscF, viscTP_model, viscG=12e-6):
         '''
         q: vapor quality [-] \n
         viscF: liquid phase viscosity [Pa.s]
-        viscg: vapor phase viscosity [Pa.s]
+        viscg: vapor phase viscosity [Pa.s]  -----> 12e-6
         viscTP: two-phase viscosity [Pa.s] \n
         viscTP_model: models of two-phase flow (McAdams, Cicchitti, Dukler)
 
         Return: viscTP
          '''
         nome_desta_funcao = sys._getframe().f_code.co_name
+
+        q = quality
 
         viscTP_models = ['McAdams', 'Cicchitti', 'Dukler']
         if viscTP_model not in viscTP_models:
@@ -347,7 +360,7 @@ class FlowTools_class(Properties):
         return viscTP
 
 
-    def reynoldsBifasico(self, Gt, Dc, viscTP):
+    def reynoldsBifasico(self, mass_flux, tube_diameter, viscTP):
         '''
         Gt: mass flux [kg/s.m2] \n
         Dc: diameter [m] \n
@@ -356,11 +369,12 @@ class FlowTools_class(Properties):
 
         Return: ReTP
          '''
+        Gt, Dc = mass_flux, tube_diameter
 
         return (Gt * Dc / viscTP)
 
 
-    def twoPhaseMultiplier(self, q, viscTP, viscL, volG, volL, n=-0.25):
+    def twoPhaseMultiplier(self, quality, viscTP, viscL, volG, volL, n=-0.25):
         '''
         :param q: vapor quality [-]
         viscTP: two-phase viscosity model [Pa.s] \n
@@ -374,6 +388,7 @@ class FlowTools_class(Properties):
 
         :Return: phiLO2
         '''
+        q = quality
 
         phiLO2 = np.power((viscTP / viscL), n) * (1. + (volG / volL - 1.) * q)
 
@@ -383,7 +398,7 @@ class FlowTools_class(Properties):
 
 
 
-def solution_concentration_set_function(lightComponent: object, MM: object, base: object) -> object:
+def solution_concentration_set_function(lightComponent, molar_weight, base):
     '''
     This function is useful to obtain mass fraction and molar fraction VECTOR of a BINARY mixture \n
 
@@ -397,6 +412,8 @@ def solution_concentration_set_function(lightComponent: object, MM: object, base
 
     Return: z, z_mass
     '''
+    MM = molar_weight
+
     nome_desta_funcao = sys._getframe().f_code.co_name
     if lightComponent > 1. or lightComponent < 0.0:
         raise Exception('You entered with a concentration out of expected range whe you calls the function ' + str(nome_desta_funcao))
