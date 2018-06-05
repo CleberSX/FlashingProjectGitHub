@@ -244,7 +244,7 @@ def initial_values():
     Necessary set initial values to get in solve_ivp numerical method \n
     Return: u_e, p_e, h_e
     '''
-    Ac_e = Area(0.0) 
+    Ac_e = Area(0.0)
     volL_e = flowtools_obj.specificVolumeLiquid_Wrap(p_e, T_e, MM, z, density_models['_jpDias'])
     u_e = (mdotL_e * volL_e) / Ac_e                  # Para obter u_e (subcooled liquid)
     _q, h_e, _s = hsFv_obj(p_e, T_e, z)            #Para obter h_e (subcooled liquid, so F_V = 0)
@@ -283,8 +283,8 @@ def edo_sp(l, uph):
     ''''''
     global T_e, z, z_mass, ks, mdotL_e, MM
     # unpack
-    u, p, h = uph
 
+    u, p, h = uph
 
     # calculating CpL, radius, Gt, area
     CpL = flowtools_obj.specificLiquidHeat_jpDias(T_e, p, z_mass)
@@ -335,9 +335,9 @@ def edo_sp(l, uph):
 
     matrizA = np.array([[A11,A12,A13],[A21,A22,A23],[A31,A32,A33]])
     RHS_C = np.array([C1, C2, C3])
-    dudl, dpdl, dhdl = np.linalg.solve(matrizA, RHS_C)
+    dudl, dpdl, dhdl = np.linalg.solve(matrizA, RHS_C) #flinha.shape is (3,)
 
-    return (dudl, dpdl, dhdl)
+    return dudl, dpdl, dhdl
 
 
 def saturation_point_met(l, uph):
@@ -346,7 +346,7 @@ def saturation_point_met(l, uph):
     :param t: independent variable \n
     :param uph: dependent variables (packed), i.e., uph = uph(t) \n
 
-    :return: 0.0 or 1.0
+    :return: 0.0 or 1.0 (must be a float)
     '''
     _u, p, h = uph
     CpL = flowtools_obj.specificLiquidHeat_jpDias(T_e, p, z_mass)
@@ -363,7 +363,9 @@ def saturation_point_met(l, uph):
 def main():
     saturation_point_met.terminal = True
     saturation_point_met.direction = 0
-    return solve_ivp(edo_sp, [0.0, L], [u_e, p_e, h_e], method='Radau', max_step=1e-2, events=saturation_point_met)
+    uphINI = np.array([u_e, p_e, h_e])
+    return solve_ivp(edo_sp, [0.0, L], uphINI, method='BDF', max_step=1e-2,
+                     events=saturation_point_met, vectorized=False)
 
 
 # =====================================================================================
@@ -389,7 +391,7 @@ logging.warning('velocidade no flash point = ' + str(u_sp[-1]))
 l_singlephase = uph_sp.t.T
 size = l_singlephase.shape[0]
 # Forcing vector length to become two dimensional
-l_singlephase = l_singlephase.reshape((size, 1))
+l_singlephase.shape = (size, 1)
 # Taking the transpose
 uph_singlephase = uph_sp.y.T
 # Concatenating time with uph_sp
@@ -398,7 +400,9 @@ tuph_singlephase = np.append(l_singlephase, uph_singlephase, axis=1)
 df_sp = pd.DataFrame(tuph_singlephase,columns=['length(m)', 'velocity(m/s)', 'pressure(Pa)', 'enthalpy(J/kgK)'])
 single_phase_case = 'single_phase'
 # r na frente é devido a problematica da barra invertida do windows
-df_sp.to_csv(r'..\Results_pkg\{}.csv'.format(single_phase_case), sep='\t', float_format='%.4f')
+df_sp.to_csv(r'../Results_pkg/{}.csv'.format(single_phase_case), sep='\t', float_format='%.4f')
+
+# /Users/Adm/Documents/aa.UniversUFSC/Tese_Doutorado/Git_Reposit_Local_Mac/FlashingProjectGitHub
 
 
 
@@ -434,8 +438,8 @@ def edo_2p(l, uph):
     # ======================================================================
     #                      find(T)                                         #
     # ======================================================================
-    TI = 0.95 * T_e
-    TS = 1.05 * T_e
+    TI = 0.9 * T_e
+    TS = 1.1 * T_e
 
     def find_temperature(temperature, pressure, molar_composition, enthalpy):
         _q, helv, _s = hsFv_obj(pressure, temperature, molar_composition)
@@ -569,7 +573,7 @@ def edo_2p(l, uph):
     RHS_C = np.array([C1, C2, C3])
     dudl, dpdl, dhdl = np.linalg.solve(matrizA, RHS_C)
 
-    return (dudl, dpdl, dhdl)
+    return np.array([dudl, dpdl, dhdl])
 
 
 # CREATING INITIAL CONDITIONS FOR THE TWO-PHASE BASED ON SINGLE-PHASE RESULTS
@@ -580,38 +584,90 @@ h_sp_0 = h_sp[-1]
 tolerance = np.array([1e-2, 1e-1, 1e-1])
 
 
-def main2():
-    return solve_ivp(edo_2p, [l_sp_0, L], [u_sp_0, p_sp_0, h_sp_0], method='Radau', max_step=1e-5, atol=tolerance)
+# def main2():
+#     return solve_ivp(edo_2p, [l_sp_0, L], [u_sp_0, p_sp_0, h_sp_0], method='Radau',  atol=tolerance, vectorized=True)
 
 
+from scipy import integrate
+
+# The ``driver`` that will integrate the ODE(s):
+if __name__ == '__main__':
+
+    # Start by specifying the integrator:
+    # use ``vode`` with "backward differentiation formula"
+    r = integrate.ode(edo_2p).set_integrator('vode', method='bdf')
+
+    # Set the time range
+    t_start = l_sp_0
+    t_final = L
+    delta_t = 0.1
+    # Number of time steps: 1 extra for initial condition
+    num_steps = int(np.floor((t_final - t_start) / delta_t)) + 1
+
+    # Set initial condition(s): for integrating variable and time!
+    u_t_zero = u_sp_0
+    p_t_zero = p_sp_0
+    h_t_zero = h_sp_0
+    r.set_initial_value([u_t_zero, p_t_zero, h_t_zero], t_start)
+
+    # Additional Python step: create vectors to store trajectories
+    l_tp = np.zeros((num_steps, 1))
+    u_tp = np.zeros((num_steps, 1))
+    p_tp = np.zeros((num_steps, 1))
+    h_tp = np.zeros((num_steps, 1))
+    l_tp[0] = t_start
+    u_tp[0] = u_t_zero
+    p_tp[0] = p_t_zero
+    h_tp[0] = h_t_zero
+
+    # Integrate the ODE(s) across each delta_t timestep
+    k = 1
+    while r.successful() and k < num_steps:
+        r.integrate(r.t + delta_t)
+
+        # Store the results to plot later
+        l_tp[k] = r.t
+        u_tp[k] = r.u
+        p_tp[k] = r.p
+        h_tp[k] = r.h
+        print('valor de l', l_tp)
+        k += 1
+
+    # All done!  Plot the trajectories in two separate plots:
+
+
+
+
+
+sys.exit(0)
 # =====================================================================================
 # ------------------------------EXECUTING main(two-phase)--------------------------   =
-uph_tp = main2()
-# =====================================================================================
-# UNPACKING THE RESULTS
-u_tp = uph_tp.y[0,:]
-p_tp = uph_tp.y[1,:]
-h_tp = uph_tp.y[2,:]
-l_tp = uph_tp.t
+# uph_tp = main2()
+# # =====================================================================================
+# # UNPACKING THE RESULTS
+# u_tp = uph_tp.y[0,:]
+# p_tp = uph_tp.y[1,:]
+# h_tp = uph_tp.y[2,:]
+# l_tp = uph_tp.t
 # PREPARING DATA TO PLOT
-u_p = np.hstack((u_sp, u_tp))
-p_p = np.hstack((p_sp, p_tp))
-h_p = np.hstack((h_sp, h_tp))
-l_p = np.hstack((l_sp, l_tp))
-
-# STACKING SP results to TP ones and taking the transpose
-uph_sp_plus_tp = (np.hstack((uph_sp.y, uph_tp.y))).T
-l_sp_plus_tp = (np.hstack((uph_sp.t, uph_tp.t))).T
-l_size = l_sp_plus_tp.shape[0]
-# Forcing vector length to become two dimensional
-l_sp_plus_tp = l_sp_plus_tp.reshape((l_size, 1))
-# Appending l_sp_plus_tp to uph_sp_plus_tp
-tuph_sp_plus_tp = np.append(l_sp_plus_tp, uph_sp_plus_tp, axis=1)
-# Send matrix to pandas
-df_sp_plus_tp = pd.DataFrame(tuph_sp_plus_tp, columns=['length(m)', 'velocity(m/s)', 'pressure(Pa)', 'enthalpy(J/kgK)'])
-entire_case = 'sp_AND_tp'
-# r na frente é devido a problematica da barra invertida do windows
-df_sp_plus_tp.to_csv(r'..\Results_pkg\{}.csv'.format(entire_case), sep='\t', float_format='%.4f')
+# u_p = np.hstack((u_sp, u_tp))
+# p_p = np.hstack((p_sp, p_tp))
+# h_p = np.hstack((h_sp, h_tp))
+# l_p = np.hstack((l_sp, l_tp))
+#
+# # STACKING SP results to TP ones and taking the transpose
+# uph_sp_plus_tp = (np.hstack((uph_sp.y, uph_tp.y))).T
+# l_sp_plus_tp = (np.hstack((uph_sp.t, uph_tp.t))).T
+# l_size = l_sp_plus_tp.shape[0]
+# # Forcing vector length to become two dimensional
+# l_sp_plus_tp.shape = (l_size, 1)
+# # Appending l_sp_plus_tp to uph_sp_plus_tp
+# tuph_sp_plus_tp = np.append(l_sp_plus_tp, uph_sp_plus_tp, axis=1)
+# # Send matrix to pandas
+# df_sp_plus_tp = pd.DataFrame(tuph_sp_plus_tp, columns=['length(m)', 'velocity(m/s)', 'pressure(Pa)', 'enthalpy(J/kgK)'])
+# entire_case = 'sp_AND_tp'
+# # r na frente é devido a problematica da barra invertida do windows
+# df_sp_plus_tp.to_csv(r'..\Results_pkg\{}.csv'.format(entire_case), sep='\t', float_format='%.4f')
 
 
 '''
@@ -654,6 +710,7 @@ df_sp_plus_tp.to_csv(r'..\Results_pkg\{}.csv'.format(entire_case), sep='\t', flo
 # for i, r in enumerate(rinho):
 #     ur[i] = 2 * Gtinter * volL_inter * (1. - (r / R) ** 2)
 #
+
 plt.figure(figsize=(7,5))
 # plt.xlim(0.0,1.6)
 # plt.ylim(-8.0, 8.0)
