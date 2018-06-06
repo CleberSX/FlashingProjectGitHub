@@ -456,7 +456,7 @@ def edo_2p(l, uph):
         print('It has been difficult to find the roots ' + str(msg_err))
 
     try:
-        q, is_stable, K_values_newton, initial_K_values = flash(p, T, pC, Tc, AcF, z)
+        q, is_stable, K_values_newton, _initial_K_values = flash(p, T, pC, Tc, AcF, z)
         if is_stable is False:
             x = z / (q * (K_values_newton - 1.) + 1.)
             y = K_values_newton * x
@@ -557,9 +557,10 @@ def edo_2p(l, uph):
     phiLO2 = flowtools_obj.twoPhaseMultiplier(q, viscTP, viscL, volG, volL)
     logging.warning('densidade todo bifásico como liquido = %s' % (1. / volL_fo))
     logging.warning('densidade do bifásico = %s' % (1. / volTP))
-    logging.warning('viscosidade todo bifásico como liquido = %s' % viscL_fo)
-    logging.warning('viscosidade só da parte liquida = %s' % viscL)
-    logging.warning('viscosidade do bifásico = %s' % viscTP)
+    logging.warning('viscosidade todo bifásico como liquido = %s' % (viscL_fo * 1e6))
+    logging.warning('viscosidade só da parte liquida = %s' % (viscL * 1e6))
+    logging.warning('viscosidade do bifásico = %s' % (viscTP * 1e6))
+    logging.warning('Multiplicador Bifasico = %s' % phiLO2)
     # ======================================================================
     #                      friction factor f_LO                            #
     # ======================================================================
@@ -591,49 +592,49 @@ h_sp_0 = h_sp[-1]
 tolerance = np.array([1e-2, 1e-1, 1e-1])
 
 
-def main2():
-    return solve_ivp(edo_2p, [l_sp_0, L], [u_sp_0, p_sp_0, h_sp_0], method='Radau',  atol=tolerance, vectorized=False)
+# def main2():
+#     return solve_ivp(edo_2p, [l_sp_0, L], [u_sp_0, p_sp_0, h_sp_0], method='Radau',  atol=tolerance, vectorized=False)
 
 
-# from scipy import integrate
-#
-# # The ``driver`` that will integrate the ODE(s):
-# if __name__ == '__main__':
-#
-#     # Start by specifying the integrator:
-#     # use ``vode`` with "backward differentiation formula"
-#     r = integrate.ode(edo_2p).set_integrator('vode', method='bdf')
-#
-#     # Set the time range
-#     delta_l = 0.1
-#     # Number of time steps: 1 extra for initial condition
-#     num_steps = int(np.floor((L - l_sp_0) / delta_l)) + 1
-#
-#     # Set initial condition(s): for integrating variable and time!
-#     r.set_initial_value([u_sp_0, p_sp_0, h_sp_0], l_sp_0)
-#
-#     # Additional Python step: create vectors to store trajectories
-#     l_tp = np.zeros((num_steps, 1))
-#     u_tp = np.zeros((num_steps, 1))
-#     p_tp = np.zeros((num_steps, 1))
-#     h_tp = np.zeros((num_steps, 1))
-#     l_tp[0] = l_sp_0
-#     u_tp[0] = u_sp_0
-#     p_tp[0] = p_sp_0
-#     h_tp[0] = h_sp_0
-#
-#     # Integrate the ODE(s) across each delta_t timestep
-#     k = 1
-#     while r.successful() and k < num_steps:
-#         r.integrate(r.t + delta_l)
-#
-#         # Store the results to plot later
-#         l_tp[k] = r.t
-#         u_tp[k] = r.u
-#         p_tp[k] = r.p
-#         h_tp[k] = r.h
-#         print('valor de l', l_tp[k])
-#         k += 1
+from scipy import integrate
+
+# The ``driver`` that will integrate the ODE(s):
+if __name__ == '__main__':
+
+    # Start by specifying the integrator:
+    # use ``vode`` with "backward differentiation formula"
+    r = integrate.ode(edo_2p).set_integrator('vode', method='bdf')
+
+    # Set the time range
+    delta_l = 0.1
+    # Number of time steps: 1 extra for initial condition
+    num_steps = int(np.floor((L - l_sp_0) / delta_l)) + 1
+
+    # Set initial condition(s): for integrating variable and time!
+    r.set_initial_value([u_sp_0, p_sp_0, h_sp_0], l_sp_0)
+
+    # Additional Python step: create vectors to store trajectories
+    l_tp = np.zeros((num_steps, 1))
+    u_tp = np.zeros((num_steps, 1))
+    p_tp = np.zeros((num_steps, 1))
+    h_tp = np.zeros((num_steps, 1))
+    l_tp[0] = l_sp_0
+    u_tp[0] = u_sp_0
+    p_tp[0] = p_sp_0
+    h_tp[0] = h_sp_0
+
+    # Integrate the ODE(s) across each delta_t timestep
+    k = 1
+    while r.successful() and r.t <= L:
+        r.integrate(r.t + delta_l)
+
+        # Store the results to plot later
+        l_tp[k] = r.t
+        u_tp[k] = r.y[0]
+        p_tp[k] = r.y[1]
+        h_tp[k] = r.y[2]
+        print('valor de l', l_tp[k])
+        k += 1
 
     # All done!  Plot the trajectories in two separate plots:
 
@@ -644,7 +645,7 @@ def main2():
 # sys.exit(0)
 # =====================================================================================
 # ------------------------------EXECUTING main(two-phase)--------------------------   =
-uph_tp = main2()
+# uph_tp = main2()
 # # =====================================================================================
 # # UNPACKING THE RESULTS
 # u_tp = uph_tp.y[0,:]
@@ -652,24 +653,24 @@ uph_tp = main2()
 # h_tp = uph_tp.y[2,:]
 # l_tp = uph_tp.t
 # PREPARING DATA TO PLOT
-# u_p = np.hstack((u_sp, u_tp))
-# p_p = np.hstack((p_sp, p_tp))
-# h_p = np.hstack((h_sp, h_tp))
-# l_p = np.hstack((l_sp, l_tp))
+u_p = np.hstack((u_sp, u_tp))
+p_p = np.hstack((p_sp, p_tp))
+h_p = np.hstack((h_sp, h_tp))
+l_p = np.hstack((l_sp, l_tp))
 #
-# # STACKING SP results to TP ones and taking the transpose
-# uph_sp_plus_tp = (np.hstack((uph_sp.y, uph_tp.y))).T
-# l_sp_plus_tp = (np.hstack((uph_sp.t, uph_tp.t))).T
-# l_size = l_sp_plus_tp.shape[0]
-# # Forcing vector length to become two dimensional
-# l_sp_plus_tp.shape = (l_size, 1)
-# # Appending l_sp_plus_tp to uph_sp_plus_tp
-# tuph_sp_plus_tp = np.append(l_sp_plus_tp, uph_sp_plus_tp, axis=1)
-# # Send matrix to pandas
-# df_sp_plus_tp = pd.DataFrame(tuph_sp_plus_tp, columns=['length(m)', 'velocity(m/s)', 'pressure(Pa)', 'enthalpy(J/kgK)'])
-# entire_case = 'sp_AND_tp'
-# # r na frente é devido a problematica da barra invertida do windows
-# df_sp_plus_tp.to_csv(r'..\Results_pkg\{}.csv'.format(entire_case), sep='\t', float_format='%.4f')
+# STACKING SP results to TP ones and taking the transpose
+uph_sp_plus_tp = (np.hstack((uph_sp.y, r.y))).T
+l_sp_plus_tp = (np.hstack((uph_sp.t, r.t))).T
+l_size = l_sp_plus_tp.shape[0]
+# Forcing vector length to become two dimensional
+l_sp_plus_tp.shape = (l_size, 1)
+# Appending l_sp_plus_tp to uph_sp_plus_tp
+tuph_sp_plus_tp = np.append(l_sp_plus_tp, uph_sp_plus_tp, axis=1)
+# Send matrix to pandas
+df_sp_plus_tp = pd.DataFrame(tuph_sp_plus_tp, columns=['length(m)', 'velocity(m/s)', 'pressure(Pa)', 'enthalpy(J/kgK)'])
+entire_case = 'sp_AND_tp'
+# r na frente é devido a problematica da barra invertida do windows
+df_sp_plus_tp.to_csv(r'..\Results_pkg\{}.csv'.format(entire_case), sep='\t', float_format='%.4f')
 
 
 '''

@@ -269,8 +269,6 @@ class FlowTools_class(Properties):
 
         return Gt * Dc / viscL
 
-    
-
 
     def frictionChurchillSEC(self, reynolds_single_phase, rugosity, tube_diameter):
         '''
@@ -328,8 +326,6 @@ class FlowTools_class(Properties):
         return f_F
 
 
-
-
     def viscosityTwoPhase(self, quality, volG, volTP, viscF, viscTP_model, viscG=12e-6):
         '''
         q: vapor quality [-] \n
@@ -375,7 +371,7 @@ class FlowTools_class(Properties):
         return (Gt * Dc / viscTP)
 
 
-    def twoPhaseMultiplier(self, quality, viscTP, viscL, volG, volL, n=-0.25):
+    def twoPhaseMultiplier(self, quality, viscTP, viscL, volG, volL, n = 0.25):
         '''
         :param q: vapor quality [-]
         viscTP: two-phase viscosity model [Pa.s] \n
@@ -383,7 +379,7 @@ class FlowTools_class(Properties):
         viscG: vapor phase viscosity [P.s] \n
         volG: gas phase specific volume [m3/kg] \n
         volL: liquid phase specific volume [m3/kg] \n
-        n: model parameter in two-phase multiplier (n=-0.25 when Blasius is used) \n
+        n: model parameter in two-phase multiplier (n= 0.25 when Blausius is used) \n
 
         phiLO2: two-phase multiplier [-]
 
@@ -427,3 +423,4 @@ def solution_concentration_set_function(lightComponent, molar_weight, base):
     zin = np.array([lightComponent, (1. - lightComponent)])
     z, z_mass = Tools_Convert.frac_input(MM, zin, base)
     return z, z_mass
+
