@@ -322,7 +322,9 @@ def edo_sp(l, uph):
 
     # friction factor
     viscL = flowtools_obj.viscosityLiquid_Wrap(p, T, z, z_mass, singlePhaseModels['viscosity'])
+    # logging.warning('viscosity = %s and density = %s' % (viscL * 1e6, (1. / volL)))
     Re_mon = flowtools_obj.reynolds_function(Gt, Dc, viscL)
+    # logging.warning('(Re_mon = %s), na posicao (l = %s)' % (Re_mon, l))
     f_F = flowtools_obj.frictionFactorFanning_Wrap(Re_mon, ks, Dc, singlePhaseModels['friction'])
     
     # setting the matrix coefficients
@@ -382,6 +384,7 @@ pB_e_v = pB_e * np.ones_like(u_sp)
 
 logging.warning('temperatura entrada duto T_e = ' + str(T_e))
 logging.warning('velocidade (u = %s ) na posicao (l = %s )  ' % (u_sp[3], l_sp[3]))
+logging.warning('velocidade (u = %s ) na posicao (l = %s )  ' % (u_sp[6], l_sp[6]))
 logging.warning('flashing point = ' + str(uph_sp.t_events))
 logging.warning('última pressao = ' + str(p_sp[-1]))
 logging.warning('velocidade no flash point = ' + str(u_sp[-1]))
@@ -463,7 +466,7 @@ def edo_2p(l, uph):
     except Exception as new_err:
         print('This mixture is stable yet! (q < 0.0)! Artificially q and y are set to ZERO ' + str(new_err))
 
-    logging.warning('(T = %s ) and (P = %s ) and (u = %s ) at l = %s ' % (T, p, u, l))
+    logging.warning('(T = %s ), (P = %s ), (i = %s) and (u = %s ) at l = %s ' % (T, p, h, u, l))
     logging.warning('Vapor quality = ' + str(q))
 
     x_mass = Tools_Convert.convert_molarfrac_TO_massfrac(MM, x)
@@ -552,6 +555,11 @@ def edo_2p(l, uph):
     volTP = flowtools_obj.specificVolumeTwoPhase(q, volG, volL)
     viscTP = flowtools_obj.viscosityTwoPhase(q, volG, volTP, viscL,twoPhase_models['viscosityTP'])
     phiLO2 = flowtools_obj.twoPhaseMultiplier(q, viscTP, viscL, volG, volL)
+    logging.warning('densidade todo bifásico como liquido = %s' % (1. / volL_fo))
+    logging.warning('densidade do bifásico = %s' % (1. / volTP))
+    logging.warning('viscosidade todo bifásico como liquido = %s' % viscL_fo)
+    logging.warning('viscosidade só da parte liquida = %s' % viscL)
+    logging.warning('viscosidade do bifásico = %s' % viscTP)
     # ======================================================================
     #                      friction factor f_LO                            #
     # ======================================================================
@@ -572,8 +580,7 @@ def edo_2p(l, uph):
     matrizA = np.array([[A11, A12, A13], [A21, A22, A23], [A31, A32, A33]])
     RHS_C = np.array([C1, C2, C3])
     dudl, dpdl, dhdl = np.linalg.solve(matrizA, RHS_C)
-
-    return np.array([dudl, dpdl, dhdl])
+    return np.array([dudl, dpdl, dhdl]) #array shape (3,)
 
 
 # CREATING INITIAL CONDITIONS FOR THE TWO-PHASE BASED ON SINGLE-PHASE RESULTS
@@ -584,54 +591,49 @@ h_sp_0 = h_sp[-1]
 tolerance = np.array([1e-2, 1e-1, 1e-1])
 
 
-# def main2():
-#     return solve_ivp(edo_2p, [l_sp_0, L], [u_sp_0, p_sp_0, h_sp_0], method='Radau',  atol=tolerance, vectorized=True)
+def main2():
+    return solve_ivp(edo_2p, [l_sp_0, L], [u_sp_0, p_sp_0, h_sp_0], method='Radau',  atol=tolerance, vectorized=False)
 
 
-from scipy import integrate
-
-# The ``driver`` that will integrate the ODE(s):
-if __name__ == '__main__':
-
-    # Start by specifying the integrator:
-    # use ``vode`` with "backward differentiation formula"
-    r = integrate.ode(edo_2p).set_integrator('vode', method='bdf')
-
-    # Set the time range
-    t_start = l_sp_0
-    t_final = L
-    delta_t = 0.1
-    # Number of time steps: 1 extra for initial condition
-    num_steps = int(np.floor((t_final - t_start) / delta_t)) + 1
-
-    # Set initial condition(s): for integrating variable and time!
-    u_t_zero = u_sp_0
-    p_t_zero = p_sp_0
-    h_t_zero = h_sp_0
-    r.set_initial_value([u_t_zero, p_t_zero, h_t_zero], t_start)
-
-    # Additional Python step: create vectors to store trajectories
-    l_tp = np.zeros((num_steps, 1))
-    u_tp = np.zeros((num_steps, 1))
-    p_tp = np.zeros((num_steps, 1))
-    h_tp = np.zeros((num_steps, 1))
-    l_tp[0] = t_start
-    u_tp[0] = u_t_zero
-    p_tp[0] = p_t_zero
-    h_tp[0] = h_t_zero
-
-    # Integrate the ODE(s) across each delta_t timestep
-    k = 1
-    while r.successful() and k < num_steps:
-        r.integrate(r.t + delta_t)
-
-        # Store the results to plot later
-        l_tp[k] = r.t
-        u_tp[k] = r.u
-        p_tp[k] = r.p
-        h_tp[k] = r.h
-        print('valor de l', l_tp)
-        k += 1
+# from scipy import integrate
+#
+# # The ``driver`` that will integrate the ODE(s):
+# if __name__ == '__main__':
+#
+#     # Start by specifying the integrator:
+#     # use ``vode`` with "backward differentiation formula"
+#     r = integrate.ode(edo_2p).set_integrator('vode', method='bdf')
+#
+#     # Set the time range
+#     delta_l = 0.1
+#     # Number of time steps: 1 extra for initial condition
+#     num_steps = int(np.floor((L - l_sp_0) / delta_l)) + 1
+#
+#     # Set initial condition(s): for integrating variable and time!
+#     r.set_initial_value([u_sp_0, p_sp_0, h_sp_0], l_sp_0)
+#
+#     # Additional Python step: create vectors to store trajectories
+#     l_tp = np.zeros((num_steps, 1))
+#     u_tp = np.zeros((num_steps, 1))
+#     p_tp = np.zeros((num_steps, 1))
+#     h_tp = np.zeros((num_steps, 1))
+#     l_tp[0] = l_sp_0
+#     u_tp[0] = u_sp_0
+#     p_tp[0] = p_sp_0
+#     h_tp[0] = h_sp_0
+#
+#     # Integrate the ODE(s) across each delta_t timestep
+#     k = 1
+#     while r.successful() and k < num_steps:
+#         r.integrate(r.t + delta_l)
+#
+#         # Store the results to plot later
+#         l_tp[k] = r.t
+#         u_tp[k] = r.u
+#         p_tp[k] = r.p
+#         h_tp[k] = r.h
+#         print('valor de l', l_tp[k])
+#         k += 1
 
     # All done!  Plot the trajectories in two separate plots:
 
@@ -639,10 +641,10 @@ if __name__ == '__main__':
 
 
 
-sys.exit(0)
+# sys.exit(0)
 # =====================================================================================
 # ------------------------------EXECUTING main(two-phase)--------------------------   =
-# uph_tp = main2()
+uph_tp = main2()
 # # =====================================================================================
 # # UNPACKING THE RESULTS
 # u_tp = uph_tp.y[0,:]

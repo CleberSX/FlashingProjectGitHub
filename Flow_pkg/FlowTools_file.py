@@ -53,7 +53,7 @@ class FlowTools_class(Properties):
 
         Return: volTP
         '''
-        return ((1.-quality) * volF + quality * volG)
+        return ((1.- quality) * volF + quality * volG)
 
        
     def voidFraction(self, quality, volG ,spvolTP):
@@ -88,7 +88,8 @@ class FlowTools_class(Properties):
 
         densO = 966.43636 - 0.57391608 * Tc - 0.00024475524 * Tc ** 2
         densR = PropsSI("D", "T", T, "P", p,"R134a")
-        densL = 5 * densO * np.power( (1. + wr * (densO / densR - 1.) ), -1)
+        # densL = 5 * densO * np.power( (1. + wr * (densO / densR - 1.) ), -1)
+        densL = (1. - wr) * densO + wr * densR # ideal solution (I have changed it on my own)
         return densL
 
 
@@ -243,7 +244,7 @@ class FlowTools_class(Properties):
             msg += '\t Choose one of the models: %s' % visc_models
             raise Exception(msg)
         if visc_model == 'NISSAN':
-            viscL = self.viscosityLiquid_NISSAN_SEC(T, p, x)
+            viscL = self.viscosityLiquid_NISSAN_SEC(T, p, x_mass)
         elif visc_model == 'jpDias':
             viscL = self.viscosityLiquid_jpDias_SEC(T, p, x_mass)
         return viscL
