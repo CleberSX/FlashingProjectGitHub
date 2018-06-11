@@ -225,8 +225,10 @@ class Properties(PengRobinsonEos):
         :href (reference_specific_enthalpy [J/kmol]): is the href_mass, but converted to molar base
 
 
-        :TR (reference_temperature [K]) and pR (reference_pressure [Pa]): are temperature and pressure of reference
-        :MM (molar_mass [kg/kmol]) = molar weight of component "i"
+        TR: reference temperature [K]
+        pR: reference pressure, which is actually the bubble pressure (pB) calculated at TR with
+        feed molar composition (z) [Pa]
+        MM: vector with molar weight of each component "i", i.e., MM = ([MMR134a, MMPOE]), [kg/kmol]
 
         :x (molar_fraction[-]): is the phase concentration em molar base (x => x when liquid phase;...
                               ... x => y when vapor phase)

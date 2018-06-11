@@ -422,13 +422,12 @@ twoPhase_models = {'density':density_models['_jpDias'], 'viscosity':viscosity_mo
 
 # ODE system for Two Phase Flow
 def edo_2p(l, uph):
-
     '''
-    :param t: independent variable \n
-    :param uph: dependent variables (packed), i.e., uph = uph(t) \n
-
-    :return: EDO system with derivative of uph with dt, i.e., d(uph)dt
+    t: independent variable \n
+    uph: dependent variables (packed), i.e., uph = uph(t) \n
+    return: EDO system with derivative of uph with dt, i.e., d(uph)dt
     '''
+
     global T_e, z, z_mass, ks, mdotL_e, MM, pR, TR, hR
     # unpack
     u, p, h = uph
@@ -437,7 +436,6 @@ def edo_2p(l, uph):
     Dc = 2. * rc
     Gt = mdotL_e / Ac
     Gt2 = np.power(Gt, 2)
-
     # ======================================================================
     #                      find(T)                                         #
     # ======================================================================
@@ -464,7 +462,7 @@ def edo_2p(l, uph):
             q, y, x = 0.0, np.zeros_like(z), z
             raise Exception(' Quality q = ' + str(q))
     except Exception as new_err:
-        print('This mixture is stable yet! (q < 0.0)! Artificially q and y are set to ZERO ' + str(new_err))
+        print('This mixture is stable yet! (q < 0.0)! Artificially q and y were set up to ZERO ' + str(new_err))
 
     logging.warning('(T = %s ), (P = %s ), (i = %s) and (u = %s ) at l = %s ' % (T, p, h, u, l))
     logging.warning('Vapor quality = ' + str(q))
@@ -480,14 +478,18 @@ def edo_2p(l, uph):
     # ======================================================================
     #                      compressibility                                 #
     # ======================================================================
+
     def volTP_func(pressure, temperature, quality, molar_weight, liquid_molar_composition, vapor_molar_composition,
                    density=twoPhase_models['density']):
         '''
         This function has been created to evaluate compressibility = (1 / volTP) * dvolTPdp \n
         Obs: negative signal is omitted here, but it is used ahead \n
 
+        volTP: specific two-phase volume [m3/kg] according homogeneous model \n
+
         Return: volTP
         '''
+
         volL_local = flowtools_obj.specificVolumeLiquid_Wrap(pressure, temperature, molar_weight,
                                                        liquid_molar_composition, density)
         volG_local = flowtools_obj.specificVolumGas(pressure, temperature, molar_weight, vapor_molar_composition)
@@ -499,13 +501,15 @@ def edo_2p(l, uph):
     dvolTPdp = derivative(volTP_func, p, dp, args=(T, q, MM, x, y))
     compressibility = np.power(avrg_volTP, -1) * dvolTPdp
     # =====================================================================
-    #            calculating dvolTPdh (eq. A.13 da Tese)                  #
+    #            calculating dvolTPdh (eq. A.13 Thesis)                  #
     # =====================================================================
 
     def volL_func(liquid_molar_composition, pressure, temperature, molar_weight, density=twoPhase_models['density']):
         '''
         This function has been created to make possible evaluate dvolTPdh \n
         where dvolTPdh is the derivative of specific two-phase volume with enthalpy \n
+
+        Actually, as eq. A.13 shows, volL is part of dvolTPdh evaluation \n
 
         Return: volL
         '''
@@ -523,6 +527,8 @@ def edo_2p(l, uph):
         '''
         This function has been created to make possible evaluate dvolTPdh \n
         where dvolTPdh is the derivative of specific two-phase volume with enthalpy \n
+
+        hL: saturated liquid phase [J/kg] (be careful with this unit...is not [J/kmol]) \n
 
         Return: hL
         '''
@@ -599,42 +605,41 @@ tolerance = np.array([1e-2, 1e-1, 1e-1])
 from scipy import integrate
 
 # The ``driver`` that will integrate the ODE(s):
-if __name__ == '__main__':
 
-    # Start by specifying the integrator:
-    # use ``vode`` with "backward differentiation formula"
-    r = integrate.ode(edo_2p).set_integrator('vode', method='bdf')
+# Start by specifying the integrator:
+# use ``vode`` with "backward differentiation formula"
+uph_tp = integrate.ode(edo_2p).set_integrator('vode', method='bdf')
 
-    # Set the time range
-    delta_l = 0.1
-    # Number of time steps: 1 extra for initial condition
-    num_steps = int(np.floor((L - l_sp_0) / delta_l)) + 1
+# Set the time range
+delta_l = 0.01
+# # Number of time steps: 1 extra for initial condition
+num_steps = int(np.ceil((L - l_sp_0) / delta_l)) + 1
+logging.warning('steps number = %s' % num_steps)
+# Set initial condition(s): for integrating variable and time!
+uph_tp.set_initial_value([u_sp_0, p_sp_0, h_sp_0], l_sp_0)
 
-    # Set initial condition(s): for integrating variable and time!
-    r.set_initial_value([u_sp_0, p_sp_0, h_sp_0], l_sp_0)
+# Additional Python step: create vectors to store trajectories
+l_tp = np.zeros(num_steps)
+u_tp = np.zeros(num_steps)
+p_tp = np.zeros(num_steps)
+h_tp = np.zeros(num_steps)
+l_tp[0] = l_sp_0
+u_tp[0] = u_sp_0
+p_tp[0] = p_sp_0
+h_tp[0] = h_sp_0
 
-    # Additional Python step: create vectors to store trajectories
-    l_tp = np.zeros((num_steps, 1))
-    u_tp = np.zeros((num_steps, 1))
-    p_tp = np.zeros((num_steps, 1))
-    h_tp = np.zeros((num_steps, 1))
-    l_tp[0] = l_sp_0
-    u_tp[0] = u_sp_0
-    p_tp[0] = p_sp_0
-    h_tp[0] = h_sp_0
+# # Integrate the ODE(s) across each delta_t timestep
+k = 1
+while uph_tp.successful() and uph_tp.t <= L:
+    uph_tp.integrate(uph_tp.t + delta_l)
 
-    # Integrate the ODE(s) across each delta_t timestep
-    k = 1
-    while r.successful() and r.t <= L:
-        r.integrate(r.t + delta_l)
-
-        # Store the results to plot later
-        l_tp[k] = r.t
-        u_tp[k] = r.y[0]
-        p_tp[k] = r.y[1]
-        h_tp[k] = r.y[2]
-        print('valor de l', l_tp[k])
-        k += 1
+    # Store the results to plot later
+    l_tp[k] = uph_tp.t
+    u_tp[k] = uph_tp.y[0]
+    p_tp[k] = uph_tp.y[1]
+    h_tp[k] = uph_tp.y[2]
+    print('valor de l', l_tp[k])
+    k += 1
 
     # All done!  Plot the trajectories in two separate plots:
 
@@ -657,20 +662,6 @@ u_p = np.hstack((u_sp, u_tp))
 p_p = np.hstack((p_sp, p_tp))
 h_p = np.hstack((h_sp, h_tp))
 l_p = np.hstack((l_sp, l_tp))
-#
-# STACKING SP results to TP ones and taking the transpose
-uph_sp_plus_tp = (np.hstack((uph_sp.y, r.y))).T
-l_sp_plus_tp = (np.hstack((uph_sp.t, r.t))).T
-l_size = l_sp_plus_tp.shape[0]
-# Forcing vector length to become two dimensional
-l_sp_plus_tp.shape = (l_size, 1)
-# Appending l_sp_plus_tp to uph_sp_plus_tp
-tuph_sp_plus_tp = np.append(l_sp_plus_tp, uph_sp_plus_tp, axis=1)
-# Send matrix to pandas
-df_sp_plus_tp = pd.DataFrame(tuph_sp_plus_tp, columns=['length(m)', 'velocity(m/s)', 'pressure(Pa)', 'enthalpy(J/kgK)'])
-entire_case = 'sp_AND_tp'
-# r na frente é devido a problematica da barra invertida do windows
-df_sp_plus_tp.to_csv(r'..\Results_pkg\{}.csv'.format(entire_case), sep='\t', float_format='%.4f')
 
 
 '''
@@ -715,6 +706,7 @@ df_sp_plus_tp.to_csv(r'..\Results_pkg\{}.csv'.format(entire_case), sep='\t', flo
 #
 
 plt.figure(figsize=(7,5))
+plt.grid(True)
 # plt.xlim(0.0,1.6)
 # plt.ylim(-8.0, 8.0)
 plt.xlabel('l [mm]')
@@ -725,6 +717,7 @@ plt.legend(['$u_{incompressivel}$ ao longo do duto'], loc=1)
 #
 #
 plt.figure(figsize=(7,5))
+plt.grid(True)
 # plt.xlim(0.0,1.6)
 # plt.ylim(-8.0, 8.0)
 plt.xlabel('l [mm]')
@@ -734,6 +727,7 @@ plt.plot(l_p, p_p)
 plt.legend(['pressao ao longo do duto'], loc=1)
 
 plt.figure(figsize=(7,5))
+plt.grid(True)
 # plt.xlim(0.0,1.6)
 # plt.ylim(-8.0, 8.0)
 plt.xlabel('l [mm]')
@@ -771,15 +765,19 @@ plt.legend(['entalpia ao longo do duto'], loc=1)
 # # plt.plot(l, pB_e_v)
 # # plt.legend(['Pressao Esc. Incompressivel', 'Pressão Saturação'], loc=3)
 # plt.legend('Pressão Esc. Incompressível', loc=1)
-#
-# # plt.figure(figsize=(7,5))
-# # #plt.ylim(20,120)
-# # plt.xlabel('l [m]')
-# # plt.ylabel('H [J/kg]')
-# # plt.plot(l, h)
-# # plt.legend(['$h_{incompressivel}$ ao longo do duto'], loc=3)
-#
-#
 plt.show()
 plt.close('all')
-#
+
+# STACKING the results vertically
+up_stack = np.vstack((u_p, p_p))
+uph_stack = np.vstack((up_stack, h_p))
+tuph_stack = np.vstack((l_p, uph_stack))
+# Transposing the resulting matrix
+tuph_T = tuph_stack.T
+# Send matrix to pandas
+df_sp_plus_tp = pd.DataFrame(tuph_T, columns=['length(m)', 'velocity(m/s)', 'pressure(Pa)', 'enthalpy(J/kgK)'])
+entire_case = 'sp_AND_tp'
+# r na frente é devido a problematica da barra invertida do windows
+df_sp_plus_tp.to_csv(r'..\Results_pkg\{}.csv'.format(entire_case), sep='\t', float_format='%.4f')
+
+

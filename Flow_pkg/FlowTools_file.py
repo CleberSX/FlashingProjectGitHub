@@ -32,12 +32,24 @@ class FlowTools_class(Properties):
 
     def specificVolumGas(self, pressure, temperature, molar_weight, molar_composition):
         '''
-        molar_weight: vector molar weight, i.e., molar_weight = ([MM_ref, MM_oil])
-        MMixture:  mixture molar weight --> MMixture = np.eisum('i,i', molar_composition, molar_weight) [kg/kmol]
+        This function calculates the specific gas volume. \n
+
+        pressure [Pa] \n
+        temperature [K] \n
+        molar_weight: vector molar weight, i.e., molar_weight = ([MM_ref, MM_oil]) [kg/kmol]\n
+        molar_composition: vector with molar composition, i.e., x = ([xR134a, xPOE]) \n
+        volG: specific gas volume [m3/kg] \n
+
+        return: volG
         '''
 
+        nome_desta_funcao = sys._getframe().f_code.co_name
         rhoG = self.calculate_density_phase(pressure,temperature,molar_weight,molar_composition,'vapor')
-        if rhoG == 0.0: volG = 0.0
+        if rhoG == 0.0:
+            msg = 'specific gas volume is zero in the following function: \" %s \"' % nome_desta_funcao
+            msg += '\n for this reason, the specific volume was set up - artificially - as been volG = 0.0'
+            print(msg)
+            volG = 0.0
         else: volG = np.power(rhoG, -1)
 
         return volG
@@ -49,7 +61,7 @@ class FlowTools_class(Properties):
 
         volG: specific volume saturated vapor [m3/kg] \n
         volF: specific volume saturated liquid [m3/kg] \n
-        volTP: specific volume two phase [m3/kg]
+        volTP: specific volume two phase [m3/kg] according homogeneous model \n
 
         Return: volTP
         '''
@@ -93,8 +105,6 @@ class FlowTools_class(Properties):
         return densL
 
 
-
-
     def specificVolumeLiquid_Wrap(self, pressure, temperature, molar_weight, molar_composition, density_model):
         '''
         This function chooses density from EXperimental CORrelation ('jpDias') or from THErmodynamics ('ELV') \n
@@ -123,6 +133,7 @@ class FlowTools_class(Properties):
         spvolL = np.power(densL, -1) 
         return spvolL
 
+
     def specificLiquidHeat_jpDias(self, temperature, pressure, mass_composition):
         ''' 
         The correlation was copied from JP Dias's Thesis (pg 295, EQ A.7) \n
@@ -146,8 +157,6 @@ class FlowTools_class(Properties):
         CpR = PropsSI("Cpmass", "T", T, "P", p,"R134a")
         CpO = 2411.5968 + 2.260872 * Tc
         return (1. - wr) * CpO + wr * CpR
-
-    
 
 
     def viscosityLiquid_jpDias_SEC(self, temperature, pressure, mass_composition):
@@ -244,12 +253,10 @@ class FlowTools_class(Properties):
             msg += '\t Choose one of the models: %s' % visc_models
             raise Exception(msg)
         if visc_model == 'NISSAN':
-            viscL = self.viscosityLiquid_NISSAN_SEC(T, p, x_mass)
+            viscL = self.viscosityLiquid_NISSAN_SEC(T, p, x) #I have set up x_mass instead x on my own
         elif visc_model == 'jpDias':
             viscL = self.viscosityLiquid_jpDias_SEC(T, p, x_mass)
         return viscL
-
-
 
 
     def reynolds_function(self, mass_flux, tube_diameter, viscL):
@@ -290,6 +297,7 @@ class FlowTools_class(Properties):
         B = b ** 16
         f3 = 8. / Re
         return  2 * (f3 ** 12 + 1./(A + B) ** 1.5 ) ** (1. / 12)
+
 
     def frictionColebrookSEC(self, reynolds_single_phase, rugosity, tube_diameter):
         '''This Colebrook function determines the Fanning friction factor \n
