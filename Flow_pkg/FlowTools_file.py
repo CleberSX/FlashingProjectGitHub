@@ -94,14 +94,17 @@ class FlowTools_class(Properties):
 
         Return: densL
         '''
-        x_mass, p, T = mass_composition, pressure, temperature
+        T, p, x_mass = temperature, pressure, mass_composition
         wr = x_mass[0]
         Tc = T - 273.15
 
         densO = 966.43636 - 0.57391608 * Tc - 0.00024475524 * Tc ** 2
-        densR = PropsSI("D", "T", T, "P", p,"R134a")
-        # densL = 5 * densO * np.power( (1. + wr * (densO / densR - 1.) ), -1)
-        densL = (1. - wr) * densO + wr * densR # ideal solution (I have changed it on my own)
+        volPOE = 1. / densO
+        # densR = PropsSI("D", "T", T, "P", p, "R134a")
+        densR = 1294.679 - 3.22131 * Tc - 1.23398 * 1e-2 * Tc ** 2
+        volR134 = 1. / densR
+        volL = (1. - wr) * volPOE + wr * volR134 #(ideal solution)
+        densL = 1. / volL
         return densL
 
 
@@ -111,7 +114,7 @@ class FlowTools_class(Properties):
 
         T: temperature [K] \n
         p: pressure [Pa] \n
-        MM: vector with molar weight of each component "i" [kg/kmol], i.e., (MM = ([MMrefrig, MMpoe])) 
+        MM: vector with molar weight of each component "i" [kg/kmol], i.e., (MM = ([MMrefrig, MMpoe])) \n
         x: vector molar concentration [-], i.e., (x = ([xR, xO])) \n
         x_mass: vector mass concentration [-] (x_mass = ([xR_mass, xO_mass])) \n
         spvolL: specific volume from correlation 'jpDias' or from 'ELV' [m3/kg] \n
@@ -178,7 +181,7 @@ class FlowTools_class(Properties):
         '''
         T, p, x_mass = temperature, pressure, mass_composition
         Tc = T - 273.15
-        wr = x_mass[0] * 100
+        wr = x_mass[0] * 100. # I've checked ... there is this factor 100!
 
         (a1, a2) = (38.31853120, 1.0)
         (b1, b2) = (0.03581164, 0.05188487)
@@ -229,7 +232,7 @@ class FlowTools_class(Properties):
 
     def viscosityLiquid_Wrap(self, pressure, temperature, molar_composition, mass_composition, visc_model):
         '''
-        This function/method choose the fluid single phase viscosity \n
+        This function/method chooses the fluid single phase viscosity \n
         
         For while, there are just two options for liquid viscosity: 'jpDias' correlation or 'NISSAN' model \n
 
@@ -253,7 +256,7 @@ class FlowTools_class(Properties):
             msg += '\t Choose one of the models: %s' % visc_models
             raise Exception(msg)
         if visc_model == 'NISSAN':
-            viscL = self.viscosityLiquid_NISSAN_SEC(T, p, x) #I have set up x_mass instead x on my own
+            viscL = self.viscosityLiquid_NISSAN_SEC(T, p, x)
         elif visc_model == 'jpDias':
             viscL = self.viscosityLiquid_jpDias_SEC(T, p, x_mass)
         return viscL
@@ -302,25 +305,31 @@ class FlowTools_class(Properties):
     def frictionColebrookSEC(self, reynolds_single_phase, rugosity, tube_diameter):
         '''This Colebrook function determines the Fanning friction factor \n
 
-            In fluid mechanis Colebrook calculates Darcy factor. Here we convert it to Fanning factor \n
-            For Re < 4000 Fanning factor is 16/Re (we added a IF statement for laminar flow case)  \n
+            In fluid mechanics, Colebrook equation calculates Darcy factor. \n
+            It's necessary convert to Fanning factor \n
+            For Re < 3000 Darcy factor is 64/Re (laminar case)  \n
+            f_D: Darcy friction factor [-] \n
+            f_F: Fanning friction factor = f_D / 4 [-] \n
 
         Return: f_F
         '''
         Re, ks, Dc = reynolds_single_phase, rugosity, tube_diameter
 
-        colebrook = lambda f0: - 2. * np.log10( ks / (3.7 * Dc) + 2.51 / (Re * np.sqrt(f0)) ) - 1. / np.sqrt(f0)
-        f0 = 0.25 * (np.log( (ks / Dc) / 3.7 + 5.74 / Re ** 0.9 )) ** (-2) #Fox, pg 234, EQ 8.37b
-        f_D = optimize.newton(colebrook, f0)  #Darcy 
-        if Re > 2300.: f_F = f_D / 4.
-        else: f_F = 16. / Re
-        return f_F
+        if Re <= 3000.:
+            f_D = 64. / Re
+        else:
+            colebrook = lambda f0: - 2. * np.log10( ks / (3.7 * Dc) + 2.51 / (Re * np.sqrt(f0)) ) - 1. / np.sqrt(f0)
+            f0 = 0.25 * (np.log( (ks / Dc) / 3.7 + 5.74 / Re ** 0.9 )) ** (-2) #Fox, pg 234, EQ 8.37b
+            f_D = optimize.fsolve(colebrook, f0)[0]  #Darcy
+
+        return f_D / 4.
     
     
     def frictionFactorFanning_Wrap(self, Re, ks, Dc, friction_model):
         '''This is the function/method we must call to calculate Fanning friction factor'''
 
         nome_desta_funcao = sys._getframe().f_code.co_name
+
 
         friction_models = ['Colebrook', 'Churchill']
         if friction_model not in friction_models:
@@ -331,6 +340,8 @@ class FlowTools_class(Properties):
             f_F = self.frictionChurchillSEC(Re, ks, Dc)
         elif friction_model == 'Colebrook':
             f_F = self.frictionColebrookSEC(Re, ks, Dc)
+
+        # print('Reynolds = %e <--> Fator de atrito Fanning = %.4f' % (Re, f_F))
         return f_F
 
 

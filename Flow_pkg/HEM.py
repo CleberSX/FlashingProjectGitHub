@@ -256,7 +256,7 @@ def initial_values():
 
 #[6]============================ MAIN - CODE =========================================
 #packing the parameters to get in systemEDOsinglePhase()
-singlePhaseModels = {'density':density_models['_jpDias'], 'viscosity':viscosity_models['_NISSAN'],
+singlePhaseModels = {'density':density_models['_jpDias'], 'viscosity':viscosity_models['_jpDias'],
           'friction':friction_models['_Colebrook']}
 
 #ODE system
@@ -416,9 +416,12 @@ df_sp.to_csv(r'../Results_pkg/{}.csv'.format(single_phase_case), sep='\t', float
 '''
 # sys.exit(0)
 
-twoPhase_models = {'density':density_models['_jpDias'], 'viscosity':viscosity_models['_NISSAN'],
-          'friction':friction_models['_Colebrook'],
-                 'viscosityTP':viscosity_TP_models['_McAdams']}
+twoPhase_models = {
+                   'density':density_models['_jpDias'],
+                   'viscosity':viscosity_models['_jpDias'],
+                   'friction':friction_models['_Colebrook'],
+                   'viscosityTP':viscosity_TP_models['_Cicchitti']
+                  }
 
 # ODE system for Two Phase Flow
 def edo_2p(l, uph):
@@ -434,7 +437,7 @@ def edo_2p(l, uph):
     Ac = Area(l)
     rc = np.sqrt(Ac / np.pi)
     Dc = 2. * rc
-    Gt = mdotL_e / Ac
+    Gt = mdotL_e / Ac # see that Gt = Gt(l)
     Gt2 = np.power(Gt, 2)
     # ======================================================================
     #                      find(T)                                         #
@@ -464,6 +467,7 @@ def edo_2p(l, uph):
     except Exception as new_err:
         print('This mixture is stable yet! (q < 0.0)! Artificially q and y were set up to ZERO ' + str(new_err))
 
+    logging.warning('A mistura ainda Monofásica? = %s' % (is_stable))
     logging.warning('(T = %s ), (P = %s ), (i = %s) and (u = %s ) at l = %s ' % (T, p, h, u, l))
     logging.warning('Vapor quality = ' + str(q))
 
@@ -511,6 +515,8 @@ def edo_2p(l, uph):
 
         Actually, as eq. A.13 shows, volL is part of dvolTPdh evaluation \n
 
+        volL: specific volume of liquid-phase [m3/kg] \n
+
         Return: volL
         '''
         volL = flowtools_obj.specificVolumeLiquid_Wrap(pressure, temperature, molar_weight,
@@ -542,11 +548,11 @@ def edo_2p(l, uph):
 
     volL = flowtools_obj.specificVolumeLiquid_Wrap(p, T, MM, x, twoPhase_models['density'])
     volG = flowtools_obj.specificVolumGas(p, T, MM, y)
-    H_G = prop_obj.calculate_enthalpy(TR, T, pB_e, p, y, z, hR, Cp, 'saturated_vapor')
+    H_G = prop_obj.calculate_enthalpy(TR, T, pR, p, y, z, hR, Cp, 'saturated_vapor')
     M_V = prop_obj.calculate_weight_molar_mixture(MM, y, 'saturated_vapor')
     if y.all() == 0.0: hG = 0.0
     else: hG = H_G / M_V
-    H_L = prop_obj.calculate_enthalpy(TR, T, pB_e, p, x, z, hR, Cp, 'saturated_liquid')
+    H_L = prop_obj.calculate_enthalpy(TR, T, pR, p, x, z, hR, Cp, 'saturated_liquid')
     M_L = prop_obj.calculate_weight_molar_mixture(MM, x, 'saturated_liquid')
     hL = H_L / M_L
     vol_fg = volG - volL
@@ -561,19 +567,21 @@ def edo_2p(l, uph):
     volTP = flowtools_obj.specificVolumeTwoPhase(q, volG, volL)
     viscTP = flowtools_obj.viscosityTwoPhase(q, volG, volTP, viscL,twoPhase_models['viscosityTP'])
     phiLO2 = flowtools_obj.twoPhaseMultiplier(q, viscTP, viscL, volG, volL)
-    logging.warning('densidade todo bifásico como liquido = %s' % (1. / volL_fo))
-    logging.warning('densidade do bifásico = %s' % (1. / volTP))
-    logging.warning('viscosidade todo bifásico como liquido = %s' % (viscL_fo * 1e6))
-    logging.warning('viscosidade só da parte liquida = %s' % (viscL * 1e6))
-    logging.warning('viscosidade do bifásico = %s' % (viscTP * 1e6))
-    logging.warning('Multiplicador Bifasico = %s' % phiLO2)
+    logging.warning('\n rho_fo = %s' % (1. / volL_fo))
+    # logging.warning('\n rho_bif = %s' % (1. / volTP))
+    logging.warning('\n mu_fo = %s' % (viscL_fo * 1e6))
+    # logging.warning('\n mu_L = %s' % (viscL * 1e6))
+    # logging.warning('\n mu_bif = %s' % (viscTP * 1e6))
+    logging.warning('\n Multiplicador Bifasico = %s' % phiLO2)
     # ======================================================================
     #                      friction factor f_LO                            #
     # ======================================================================
     Re_mon = flowtools_obj.reynolds_function(Gt, Dc, viscL_fo)
     f_FLO = flowtools_obj.frictionFactorFanning_Wrap(Re_mon, ks, Dc, twoPhase_models['friction'])
+    logging.warning('\n Re_fo = %s <---> Fanning_fo = %s' % (Re_mon, f_FLO))
+
     # ======================================================================
-    #                      setting the matrix coefficients                 #
+    #                      setting matrix's coefficients                 #
     # ======================================================================
     A11, A12, A13 = np.power(u, -1), - compressibility, - (dvolTPdh / volTP)
     A21, A22, A23 = u, volTP, 0.
