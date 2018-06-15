@@ -191,7 +191,7 @@ class FlowTools_class(Properties):
         (f1, f2) = (-2.82836964e-4, 1.10699073e-3)
 
         num = ( a1 + b1 * Tc + c1 * wr + d1 * np.power(Tc, 2) +
-            e1 * np.power(wr, 2) + f1 * Tc * wr) 
+            e1 * np.power(wr, 2) + f1 * Tc * wr)
 
         den = ( a2 + b2 * Tc + c2 * wr + d2 * np.power(Tc, 2) +
             e2 * np.power(wr, 2) + f2 * Tc * wr )
@@ -199,6 +199,7 @@ class FlowTools_class(Properties):
         viscCinem = num / den
         densL = self.densityLiquid_jpDias_SEC(T, p, x_mass)
         return viscCinem * densL * 1e-6
+
 
 
     def viscosityLiquid_NISSAN_SEC(self, temperature, pressure, molar_composition, G12 = 3.5):
@@ -307,15 +308,16 @@ class FlowTools_class(Properties):
 
             In fluid mechanics, Colebrook equation calculates Darcy factor. \n
             It's necessary convert to Fanning factor \n
-            For Re < 3000 Darcy factor is 64/Re (laminar case)  \n
+            For Re < 2300 Darcy factor is 64/Re (laminar case)  \n
             f_D: Darcy friction factor [-] \n
             f_F: Fanning friction factor = f_D / 4 [-] \n
 
         Return: f_F
         '''
         Re, ks, Dc = reynolds_single_phase, rugosity, tube_diameter
+        print('Reynolds = ', Re)
 
-        if Re <= 3000.:
+        if Re <= 2300.:
             f_D = 64. / Re
         else:
             colebrook = lambda f0: - 2. * np.log10( ks / (3.7 * Dc) + 2.51 / (Re * np.sqrt(f0)) ) - 1. / np.sqrt(f0)

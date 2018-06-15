@@ -27,7 +27,7 @@ def input_pipe_data_function():
 
     angleVenturi_in = np.deg2rad(39.96621 / 2.)                                   
     angleVenturi_out = np.deg2rad(13.99038 / 2.)                                   
-    rugosity = 2.e-5 #1.5e-3 , 2.6e-3                      # ks
+    rugosity = 9.9e-4 #1.5e-3 , 2.6e-3                      # ks
     lenght = 1100e-3                                        # L
     diameter = 16e-3                                        # D
     diameterVenturiThroat = 4e-3                            # Dvt

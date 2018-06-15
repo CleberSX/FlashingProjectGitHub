@@ -423,6 +423,7 @@ twoPhase_models = {
                    'viscosityTP':viscosity_TP_models['_Cicchitti']
                   }
 
+
 # ODE system for Two Phase Flow
 def edo_2p(l, uph):
     '''
@@ -610,47 +611,54 @@ tolerance = np.array([1e-2, 1e-1, 1e-1])
 #     return solve_ivp(edo_2p, [l_sp_0, L], [u_sp_0, p_sp_0, h_sp_0], method='Radau',  atol=tolerance, vectorized=False)
 
 
-from scipy import integrate
 
-# The ``driver`` that will integrate the ODE(s):
+if uph_sp.t_events[0] != 0.0:
+    # Start by specifying the integrator:
+    # use ``vode`` with "backward differentiation formula"
+    from scipy import integrate
+    uph_tp = integrate.ode(edo_2p).set_integrator('vode', method='bdf')
 
-# Start by specifying the integrator:
-# use ``vode`` with "backward differentiation formula"
-uph_tp = integrate.ode(edo_2p).set_integrator('vode', method='bdf')
+    # Set the time range
+    delta_l = 0.01
+    # # Number of time steps: 1 extra for initial condition
+    num_steps = int(np.ceil((L - l_sp_0) / delta_l)) + 1
+    logging.warning('steps number = %s' % num_steps)
+    # Set initial condition(s): for integrating variable and time!
+    uph_tp.set_initial_value([u_sp_0, p_sp_0, h_sp_0], l_sp_0)
 
-# Set the time range
-delta_l = 0.01
-# # Number of time steps: 1 extra for initial condition
-num_steps = int(np.ceil((L - l_sp_0) / delta_l)) + 1
-logging.warning('steps number = %s' % num_steps)
-# Set initial condition(s): for integrating variable and time!
-uph_tp.set_initial_value([u_sp_0, p_sp_0, h_sp_0], l_sp_0)
+    # Additional Python step: create vectors to store trajectories
+    l_tp = np.zeros(num_steps)
+    u_tp = np.zeros(num_steps)
+    p_tp = np.zeros(num_steps)
+    h_tp = np.zeros(num_steps)
+    l_tp[0] = l_sp_0
+    u_tp[0] = u_sp_0
+    p_tp[0] = p_sp_0
+    h_tp[0] = h_sp_0
 
-# Additional Python step: create vectors to store trajectories
-l_tp = np.zeros(num_steps)
-u_tp = np.zeros(num_steps)
-p_tp = np.zeros(num_steps)
-h_tp = np.zeros(num_steps)
-l_tp[0] = l_sp_0
-u_tp[0] = u_sp_0
-p_tp[0] = p_sp_0
-h_tp[0] = h_sp_0
+    # # Integrate the ODE(s) across each delta_t timestep
+    k = 1
+    while uph_tp.successful() and uph_tp.t <= L:
+        uph_tp.integrate(uph_tp.t + delta_l)
 
-# # Integrate the ODE(s) across each delta_t timestep
-k = 1
-while uph_tp.successful() and uph_tp.t <= L:
-    uph_tp.integrate(uph_tp.t + delta_l)
+        # Store the results to plot later
+        l_tp[k] = uph_tp.t
+        u_tp[k] = uph_tp.y[0]
+        p_tp[k] = uph_tp.y[1]
+        h_tp[k] = uph_tp.y[2]
+        print('valor de l', l_tp[k])
+        k += 1
 
-    # Store the results to plot later
-    l_tp[k] = uph_tp.t
-    u_tp[k] = uph_tp.y[0]
-    p_tp[k] = uph_tp.y[1]
-    h_tp[k] = uph_tp.y[2]
-    print('valor de l', l_tp[k])
-    k += 1
-
-    # All done!  Plot the trajectories in two separate plots:
-
+            # All done!  Plot the trajectories in two separate plots:
+    u_p = np.hstack((u_sp, u_tp))
+    p_p = np.hstack((p_sp, p_tp))
+    h_p = np.hstack((h_sp, h_tp))
+    l_p = np.hstack((l_sp, l_tp))
+else:
+    u_p = u_sp
+    p_p = p_sp
+    h_p = h_sp
+    l_p = l_sp
 
 
 
@@ -666,10 +674,7 @@ while uph_tp.successful() and uph_tp.t <= L:
 # h_tp = uph_tp.y[2,:]
 # l_tp = uph_tp.t
 # PREPARING DATA TO PLOT
-u_p = np.hstack((u_sp, u_tp))
-p_p = np.hstack((p_sp, p_tp))
-h_p = np.hstack((h_sp, h_tp))
-l_p = np.hstack((l_sp, l_tp))
+
 
 
 '''
@@ -680,7 +685,7 @@ l_p = np.hstack((l_sp, l_tp))
 # CpL = flowtools_obj.specificLiquidHeat_jpDias(T_e, p_e, z_mass)
 # T = T_e + (h - h_e) / CpL
 #
-# index_l_150mm = find(l, 0.150)
+index_l_150mm = find(l_p, 0.150)
 # # print('taking index of vector where l = 150mm', index_l_150mm)
 #
 # index_l_640mm = find(l, 0.640)
@@ -760,19 +765,19 @@ plt.legend(['entalpia ao longo do duto'], loc=1)
 # plt.legend(['$u_{incompressivel}$ ao longo do duto'], loc=1) #loc=2 vai para canto sup esq
 #
 #
-# plt.figure(figsize=(7, 5))
-# plt.title('Grafico comparativo com pg 81 Tese Dalton')
-# plt.grid(True)
-# plt.xlabel('$l$* [m]')
-# plt.ylabel('(p - p#1) [Pascal]')
-# # plt.plot((l[(point_l150mm-1):] - 0.150), (p[(point_l150mm - 1):] - p150mm))
-# plt.plot((l[index_l_150mm:] - 0.150), (p[index_l_150mm:] - p[index_l_150mm]))
-# plt.xlim(0.0, 0.9)
-# # plt.ylim(8e5, 10e5)
-# # plt.legend(['Pressao Esc. Incompressivel'], loc=3)
-# # plt.plot(l, pB_e_v)
-# # plt.legend(['Pressao Esc. Incompressivel', 'Pressão Saturação'], loc=3)
-# plt.legend('Pressão Esc. Incompressível', loc=1)
+plt.figure(figsize=(7, 5))
+plt.title('Grafico comparativo com pg 81 Tese Dalton')
+plt.grid(True)
+plt.xlabel('$l$* [m]')
+plt.ylabel('(p - p#1) [Pascal]')
+# plt.plot((l[(point_l150mm-1):] - 0.150), (p[(point_l150mm - 1):] - p150mm))
+plt.plot((l_p[index_l_150mm:] - 0.150), (p_p[index_l_150mm:] - p_p[index_l_150mm]))
+plt.xlim(0.0, 0.9)
+# plt.ylim(8e5, 10e5)
+# plt.legend(['Pressao Esc. Incompressivel'], loc=3)
+# plt.plot(l, pB_e_v)
+# plt.legend(['Pressao Esc. Incompressivel', 'Pressão Saturação'], loc=3)
+plt.legend('Pressão Esc. Incompressível', loc=1)
 plt.show()
 plt.close('all')
 
