@@ -315,8 +315,6 @@ class FlowTools_class(Properties):
         Return: f_F
         '''
         Re, ks, Dc = reynolds_single_phase, rugosity, tube_diameter
-        print('Reynolds = ', Re)
-
         if Re <= 2300.:
             f_D = 64. / Re
         else:

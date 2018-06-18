@@ -7,11 +7,11 @@ import sys
 
 'JUST uncomment one of the following cases'
 #=======================
-data = {'case':'case0', 'mass_fraction_R134a': 0.15/100, 'mass_flow_rate': 0.122549, 'temperature': 36.5, 'pressure': 8.92}
+# data = {'case':'case0', 'mass_fraction_R134a': 0.15/100, 'mass_flow_rate': 0.122549, 'temperature': 36.5, 'pressure': 8.92}
 # data = {'case':'case1', 'mass_fraction_R134a': 16.1/100, 'mass_flow_rate': 0.122811, 'temperature': 36.7, 'pressure': 4.79}
 # data = {'case':'case2', 'mass_fraction_R134a': 21.7/100, 'mass_flow_rate': 0.122669, 'temperature': 36.7, 'pressure': 5.80}
-# data = {'case':'case3', 'mass_fraction_R134a': 39.4/100, 'mass_flow_rate': 0.122438, 'temperature': 36.8, 'pressure': 7.16}
-# data = {'case':'case4', 'mass_fraction_R134a': 46.7/100, 'mass_flow_rate': 0.122898, 'temperature': 36.8, 'pressure': 7.3} #7.96
+# data = {'case':'case3', 'mass_fraction_R134a': 39.4/100, 'mass_flow_rate': 0.122438, 'temperature': 36.8, 'pressure': 7.16} #39.4/100, 36.8 graus 7.16 bar
+data = {'case':'case4', 'mass_fraction_R134a': 46.7/100, 'mass_flow_rate': 0.122898, 'temperature': 36.8, 'pressure': 7.3} #7.96
 # data = {'case':'case5', 'mass_fraction_R134a': 46.7/100, 'mass_flow_rate': 0.122897, 'temperature': 36.9, 'pressure': 8.63}
 # data = {'case':'case6', 'mass_fraction_R134a': 46.7/100, 'mass_flow_rate': 0.106608, 'temperature': 36.8, 'pressure': 8.64}
 # data = {'case':'case7', 'mass_fraction_R134a': 46.7/100, 'mass_flow_rate': 0.139066, 'temperature': 37.0, 'pressure': 8.63}
