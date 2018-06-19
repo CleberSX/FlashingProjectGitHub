@@ -534,8 +534,8 @@ def edo_2p(l, uph):
 
         return volL
 
-    dxR = 1e-5
-    dx = np.array([dxR, 0.0])
+
+    dx = 1e-5
     dvolLdxR = derivative(volL_func, x, dx, args=(p, T, MM))
 
 
@@ -601,8 +601,8 @@ def edo_2p(l, uph):
     A21, A22, A23 = u, volTP, 0.
     A31, A32, A33 = u, 0., 1.
 
-    aux = + volTP * phiLO2 * (2.0 * Gt2 * volL_fo * (f_FLO / Dc))
-    C1, C2, C3 = (- dAdl / avrg_A), aux, - aux
+    aux = - volTP * phiLO2 * (2.0 * Gt2 * volL_fo * (f_FLO / Dc))
+    C1, C2, C3 = (- dAdl / avrg_A), aux, aux
     # ======================================================================
     #                      matrix solving                                  #
     # ======================================================================
