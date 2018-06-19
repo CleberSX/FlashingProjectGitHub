@@ -451,8 +451,8 @@ def edo_2p(l, uph):
     # ======================================================================
     #                      find(T)                                         #
     # ======================================================================
-    TI = 0.9 * T_e
-    TS = 1.1 * T_e
+    TI = 0.95 * T_e
+    TS = 1.05 * T_e
 
     def find_temperature(temperature, pressure, molar_composition, enthalpy):
         _q, helv, _s = hsFv_obj(pressure, temperature, molar_composition)
@@ -467,7 +467,6 @@ def edo_2p(l, uph):
 
     try:
         q, is_stable, K_values_newton, _initial_K_values = flash(p, T, pC, Tc, AcF, z)
-        print('valor de K_newton---apagar', K_values_newton)
         if is_stable is False:
             x = z / (q * (K_values_newton - 1.) + 1.)
             y = K_values_newton * x
@@ -518,7 +517,8 @@ def edo_2p(l, uph):
     #            calculating dvolTPdh (eq. A.13 Thesis)                  #
     # =====================================================================
 
-    def volL_func(liquid_molar_composition, pressure, temperature, molar_weight, density=twoPhase_models['density']):
+    def volL_func(refrigerant_molar_composition, oil_molar_composition, pressure, temperature,
+                  molar_weight, density=twoPhase_models['density']):
         '''
         This function has been created to make possible evaluate dvolTPdh \n
         where dvolTPdh is the derivative of specific two-phase volume with enthalpy \n
@@ -529,37 +529,43 @@ def edo_2p(l, uph):
 
         Return: volL
         '''
+        xR, xO = refrigerant_molar_composition, oil_molar_composition
+        liquid_molar_composition = np.array([xR, xO])
         volL = flowtools_obj.specificVolumeLiquid_Wrap(pressure, temperature, molar_weight,
                                                        liquid_molar_composition, density)
 
         return volL
 
 
-    dx = 1e-5
-    dvolLdxR = derivative(volL_func, x, dx, args=(p, T, MM))
+    dxR = 1e-5
+    xR, xO = x
+    dvolLdxR = derivative(volL_func, xR, dxR, args=(xO, p, T, MM))
+    logging.warning('derivada dvolLdxR = ' + str(dvolLdxR))
 
 
-    def hL_func(liquid_molar_composition, feed_molar_composition, pressure, temperature,
+    def hL_func(refrigerant_molar_composition, oil_molar_composition, feed_molar_composition, pressure, temperature,
                 pR, TR, hR, Cp, molar_weight, fluid_type='saturated_liquid'):
         '''
         This function has been created to make possible evaluate dvolTPdh \n
         where dvolTPdh is the derivative of specific two-phase volume with enthalpy \n
-
+        xR: it´s a float
+        xO: it's a float
         hL: saturated liquid phase [J/kg] (be careful with this unit...is not [J/kmol]) \n
 
         Return: hL
         '''
+        liquid_molar_composition = np.array([refrigerant_molar_composition, oil_molar_composition])
         H_L_local = prop_obj.calculate_enthalpy(TR, temperature, pR, pressure, liquid_molar_composition,
                                           feed_molar_composition, hR, Cp, fluid_type)
         M_L_local = prop_obj.calculate_weight_molar_mixture(molar_weight, liquid_molar_composition, fluid_type)
         hL = H_L_local / M_L_local
         return hL
 
-    dhLdxR = derivative(hL_func, x, dx, args=(z, p, T, pR, TR, hR, Cp, MM))
+    dhLdxR = derivative(hL_func, xR, dxR, args=(xO, z, p, T, pR, TR, hR, Cp, MM))
 
     volL = flowtools_obj.specificVolumeLiquid_Wrap(p, T, MM, x, twoPhase_models['density'])
     if y.all() == 0.0:
-        volG, H_G, M_V, hG = 0.0, 0.0, 0.0, 0.0
+        volG, H_G, M_V, hG = np.zeros(4)
     else:
         volG = flowtools_obj.specificVolumGas(p, T, MM, y)
         H_G = prop_obj.calculate_enthalpy(TR, T, pR, p, y, z, hR, Cp, 'saturated_vapor')
@@ -570,8 +576,11 @@ def edo_2p(l, uph):
     hL = H_L / M_L
     vol_fg = volG - volL
     h_fg = hG - hL
-    xR_mass = x_mass[0]
-    dvolTPdh = (vol_fg - (1. - xR_mass) * dvolLdxR) / (h_fg - (1. - xR_mass) * dhLdxR)
+    xR_mass, xO_mass = x_mass
+    dvolTPdh = (vol_fg - xO_mass * dvolLdxR) / (h_fg - xO_mass * dhLdxR)
+    logging.warning('vaporization enthalpy = ' + str(h_fg))
+    logging.warning('derivada dhLdxR = ' + str(dhLdxR))
+    logging.warning('dvolTPdh = ' + str(dvolTPdh))
     # ======================================================================
     #                      two-phase multiplier                            #
     # ======================================================================
@@ -582,7 +591,7 @@ def edo_2p(l, uph):
     viscTP = flowtools_obj.viscosityTwoPhase(q, volG, volTP, viscL,twoPhase_models['viscosityTP'])
     phiLO2 = flowtools_obj.twoPhaseMultiplier(q, viscTP, viscL, volG, volL)
     logging.warning('\n rho_fo = %s' % (1. / volL_fo))
-    # logging.warning('\n rho_bif = %s' % (1. / volTP))
+    logging.warning('\n volTP = %s' % volTP)
     logging.warning('\n mu_fo = %s' % (viscL_fo * 1e6))
     # logging.warning('\n mu_L = %s' % (viscL * 1e6))
     # logging.warning('\n mu_bif = %s' % (viscTP * 1e6))

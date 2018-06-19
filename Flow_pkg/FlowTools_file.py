@@ -44,13 +44,14 @@ class FlowTools_class(Properties):
         '''
 
         nome_desta_funcao = sys._getframe().f_code.co_name
-        rhoG = self.calculate_density_phase(pressure,temperature,molar_weight,molar_composition,'vapor')
-        if rhoG == 0.0:
-            msg = 'specific gas volume is zero in the following function: \" %s \"' % nome_desta_funcao
-            msg += '\n for this reason, the specific volume was set up - artificially - as been volG = 0.0'
+        if molar_composition.all() == 0.0:
+            msg = 'The molar fraction "y" is zero in the following function: \" %s \"' % nome_desta_funcao
+            msg += '\n There isn\'t gas phase, so volG = 0.0'
             print(msg)
             volG = 0.0
-        else: volG = np.power(rhoG, -1)
+        else:
+            rhoG = self.calculate_density_phase(pressure,temperature,molar_weight,molar_composition,'vapor')
+            volG = np.power(rhoG, -1)
 
         return volG
 
