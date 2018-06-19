@@ -459,7 +459,7 @@ def edo_2p(l, uph):
         return helv - enthalpy
 
     try:
-        T, converged = ridder(find_temperature, TI, TS, args=(p, z, h), xtol=1e-3, full_output=True)
+        T, converged = brentq(find_temperature, TI, TS, args=(p, z, h), xtol=1e-3, full_output=True)
         if converged is False:
             raise Exception('Not converged' + str(converged))
     except Exception as msg_err:
@@ -509,7 +509,7 @@ def edo_2p(l, uph):
         volTP = flowtools_obj.specificVolumeTwoPhase(quality, volG_local, volL_local)
         return volTP
 
-    dp = 1e-5
+    dp = 1e-3
     avrg_volTP = (volTP_func(p, T, q, MM, x, y) + volTP_func(p + dp, T, q, MM, x, y)) / 2.
     dvolTPdp = derivative(volTP_func, p, dp, args=(T, q, MM, x, y))
     compressibility = np.power(avrg_volTP, -1) * dvolTPdp
@@ -529,15 +529,14 @@ def edo_2p(l, uph):
 
         Return: volL
         '''
-        xR, xO = refrigerant_molar_composition, oil_molar_composition
-        liquid_molar_composition = np.array([xR, xO])
+        liquid_molar_composition = np.array([refrigerant_molar_composition, oil_molar_composition])
         volL = flowtools_obj.specificVolumeLiquid_Wrap(pressure, temperature, molar_weight,
                                                        liquid_molar_composition, density)
 
         return volL
 
 
-    dxR = 1e-5
+    dxR = 1e-2
     xR, xO = x
     dvolLdxR = derivative(volL_func, xR, dxR, args=(xO, p, T, MM))
     logging.warning('derivada dvolLdxR = ' + str(dvolLdxR))
