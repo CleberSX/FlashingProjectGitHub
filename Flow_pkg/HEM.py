@@ -90,8 +90,16 @@ R = 8314.34                         # J / (kmol K)
 # Sr = uG/uF: speed ratio
 # LC: light component (our refrigerant)
 # Z: compressibility factor --> [p*spvolG = (Z*R*T) / MM]
+#=======================================================================================
 # z: vector binary mixture molar composition at pipe's entrance: z = ([zR, zO])
+# z_mass: vector binary mixture mass composition at pipe's entrance: z = ([zR_mass, zO_mass])
+# zR:  it's a molar concentration of refrigerant in solution at pipe's entrance (it's a float number, not a vector!)
+# zR_mass:  it's a mass concentration of refrigerant in solution at pipe's entrance (it's a float number, not a vector!)
 # x: vector binary mixture molar composition at some pipe's position: x = ([xR, xO])
+# x_mass: vector binary mixture mass composition at some pipe's position: x = ([xR_mass, xO_mass])
+# xR: it's a molar concentration of refrigerant in the mixture (it's a float number, not a vector!)
+# xR_mass: it's equivalent to xR, but in mass base (it's a float number, not a vector!)
+#=======================================================================================
 # f_D: Darcy friction factor
 # f_F: Fanning friction factor
 # hR_mass: reference enthalpy in mass base [J/kg]
@@ -130,7 +138,7 @@ R = 8314.34                         # J / (kmol K)
 #Global variables
 (pC, Tc, AcF, MM, omega_a, omega_b, kij, Cp) = props
 (TR, hR_mass, sR_mass) = input_reference_values_function()
-(p_e, T_e, mdotL_e, fmR134a) = FlowData()
+(p_e, T_e, mdotL_e, zR_mass) = FlowData() #zR_mass it is a float number!
 (angleVenturi_in, angleVenturi_out, ks, L, D, Dvt, liv, lig, lfg, lfv) = PipeData()
 
 
@@ -162,7 +170,7 @@ GETTING MOLAR AND MASS VECTOR CONCENTRATION
 '''
 
 try:
-    z, z_mass = conc(fmR134a, MM, 'mass')
+    z, z_mass = conc(zR_mass, MM, 'mass') #zR_mass is a float number!; z and z_mass are vectors!
     # There is a call for 'err', which it was built in conc function
 except Exception as err:
     print('Error when try to build concentration z and z_mass  => ' + str(err))
@@ -332,7 +340,7 @@ def edo_sp(l, uph):
     A21, A22, A23 = u, volL, 0.
     A31, A32, A33 = u, 0., 1.
 
-    aux = -2.0 * Gt2 * np.power(volL, 2) * (f_F / Dc )
+    aux = - 2.0 * Gt2 * np.power(volL, 2) * (f_F / Dc )
     C1, C2, C3 = (- dAdl / avrg_A), aux, aux
 
     matrizA = np.array([[A11,A12,A13],[A21,A22,A23],[A31,A32,A33]])
@@ -459,6 +467,7 @@ def edo_2p(l, uph):
 
     try:
         q, is_stable, K_values_newton, _initial_K_values = flash(p, T, pC, Tc, AcF, z)
+        print('valor de K_newton---apagar', K_values_newton)
         if is_stable is False:
             x = z / (q * (K_values_newton - 1.) + 1.)
             y = K_values_newton * x
@@ -525,7 +534,8 @@ def edo_2p(l, uph):
 
         return volL
 
-    dx = 1e-5
+    dxR = 1e-5
+    dx = np.array([dxR, 0.0])
     dvolLdxR = derivative(volL_func, x, dx, args=(p, T, MM))
 
 
@@ -548,17 +558,20 @@ def edo_2p(l, uph):
     dhLdxR = derivative(hL_func, x, dx, args=(z, p, T, pR, TR, hR, Cp, MM))
 
     volL = flowtools_obj.specificVolumeLiquid_Wrap(p, T, MM, x, twoPhase_models['density'])
-    volG = flowtools_obj.specificVolumGas(p, T, MM, y)
-    H_G = prop_obj.calculate_enthalpy(TR, T, pR, p, y, z, hR, Cp, 'saturated_vapor')
-    M_V = prop_obj.calculate_weight_molar_mixture(MM, y, 'saturated_vapor')
-    if y.all() == 0.0: hG = 0.0
-    else: hG = H_G / M_V
+    if y.all() == 0.0:
+        volG, H_G, M_V, hG = 0.0, 0.0, 0.0, 0.0
+    else:
+        volG = flowtools_obj.specificVolumGas(p, T, MM, y)
+        H_G = prop_obj.calculate_enthalpy(TR, T, pR, p, y, z, hR, Cp, 'saturated_vapor')
+        M_V = prop_obj.calculate_weight_molar_mixture(MM, y, 'saturated_vapor')
+        hG = H_G / M_V
     H_L = prop_obj.calculate_enthalpy(TR, T, pR, p, x, z, hR, Cp, 'saturated_liquid')
     M_L = prop_obj.calculate_weight_molar_mixture(MM, x, 'saturated_liquid')
     hL = H_L / M_L
     vol_fg = volG - volL
     h_fg = hG - hL
-    dvolTPdh = (vol_fg - (1. - x[0]) * dvolLdxR) / (h_fg - (1. - x[0]) * dhLdxR)
+    xR_mass = x_mass[0]
+    dvolTPdh = (vol_fg - (1. - xR_mass) * dvolLdxR) / (h_fg - (1. - xR_mass) * dhLdxR)
     # ======================================================================
     #                      two-phase multiplier                            #
     # ======================================================================
